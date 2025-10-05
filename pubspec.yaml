@@ -1,0 +1,32 @@
+name: cosmic_launcher
+description: A new Flutter project.
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.9.0-0
+
+dependencies:
+  auto_size_text: ^3.0.0
+  cupertino_icons: ^1.0.8
+  fluent_ui: ^4.13.0
+  fluentui_system_icons: ^1.1.273
+  flutter:
+    sdk: flutter
+  flutter_layout_grid: ^2.0.8
+  flutter_riverpod: ^3.0.1
+  math_expressions: ^2.7.0
+  window_size: 
+    git:
+      url: https://github.com/google/flutter-desktop-embedding.git
+      path: plugins/window_size
+  dropdown_search: ^6.0.2
+
+
+dev_dependencies:
+  analysis_defaults:
+    path: analysis_defaults
+  flutter_test:
+    sdk: flutter
+flutter:
+  uses-material-design: true
