@@ -1,5 +1,5 @@
-name: cosmic_launcher
-description: A new Flutter project.
+name: polaris
+description: An Interstellar Cosmic Launcher.
 publish_to: 'none'
 version: 1.0.0+1
 
@@ -14,14 +14,14 @@ dependencies:
   flutter:
     sdk: flutter
   flutter_layout_grid: ^2.0.8
-  flutter_riverpod: ^3.0.1
+  flutter_riverpod: ^3.0.2
   math_expressions: ^2.7.0
   window_size: 
     git:
       url: https://github.com/google/flutter-desktop-embedding.git
       path: plugins/window_size
   dropdown_search: ^6.0.2
-
+  uuid: ^4.5.1
 
 dev_dependencies:
   analysis_defaults:
