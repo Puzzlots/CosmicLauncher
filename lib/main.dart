@@ -1,5 +1,6 @@
 import 'package:dropdown_search/dropdown_search.dart';
 import 'package:flutter/material.dart';
+import 'utils/version_cache.dart';
 
 const String title = "Polaris Launcher";
 
@@ -56,9 +57,6 @@ class _LauncherHomeState extends State<LauncherHome> {
     });
   }
 
-  List<String> fetchVersions() { //TODO
-    return ["latest", "alpha-0.3.2", "alpha-0.3.1", "alpha-0.2.9", "last"];
-  }
 
   Map<String, Map<String, List<String>>> fetchModdedVersions() { //TODO
     return {
@@ -79,7 +77,9 @@ class _LauncherHomeState extends State<LauncherHome> {
   Future<Map<String, String>?> askForInstanceDetails(BuildContext context) async {
     final TextEditingController nameController = TextEditingController();
     String selectedVersion = "latest";
-    final List<String> versions = fetchVersions();
+    final versions = {for (var v in (await VersionCache.fetchVersions(owner: "PuzzlesHQ", repo: "CRArchive", cacheFilePath: "caches/version_cache.json"))['versions'] as List) if (v['client']?['url'] != null) v['id'] as String: v['client']['url'] as String};
+
+
 
     final loaders = ["Vanilla", "Puzzle", "Quilt"];
     String selectedLoader = loaders.first;
@@ -169,7 +169,7 @@ class _LauncherHomeState extends State<LauncherHome> {
                       const SizedBox(height: 12),
                       buildDropdown(
                         label: "Game Version",
-                        items: versions,
+                        items: versions.keys.toList(),
                         selected: selectedVersion,
                         onChanged: (v) =>
                             setState(() => selectedVersion = v),
@@ -877,7 +877,7 @@ class _LauncherHomeState extends State<LauncherHome> {
     String sortBy = 'Name';
     String groupBy = 'None';
 
-    List<Map<String, String>> getProcessedInstances() {
+    Future<List<Map<String, String>>> getProcessedInstances() async {
       // Filter
       var filtered = instances.where((i) {
         return i['name']!.toLowerCase().contains(searchQuery.toLowerCase());
@@ -1095,9 +1095,17 @@ class _LauncherHomeState extends State<LauncherHome> {
 
                                 // Grid
                                   Expanded(
-                                    child: Builder(
-                                      builder: (context) {
-                                        final list = getProcessedInstances();
+                                    child: FutureBuilder<List<Map<String, String>>>(
+                                      future: getProcessedInstances(),
+                                      builder: (context, snapshot) {
+                                        if (snapshot.connectionState == ConnectionState.waiting) {
+                                          return const Center(child: CircularProgressIndicator());
+                                        }
+                                        if (snapshot.hasError) {
+                                          return Center(child: Text('Error: ${snapshot.error}'));
+                                        }
+
+                                        final list = snapshot.data ?? [];
 
                                         if (groupBy == 'None') {
                                           // Simple grid when not grouped
@@ -1129,8 +1137,7 @@ class _LauncherHomeState extends State<LauncherHome> {
                                               crossAxisAlignment: CrossAxisAlignment.start,
                                               children: [
                                                 Padding(
-                                                  padding:
-                                                  const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                                                  padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
                                                   child: Text(
                                                     entry.key,
                                                     style: const TextStyle(
@@ -1144,8 +1151,7 @@ class _LauncherHomeState extends State<LauncherHome> {
                                                   shrinkWrap: true,
                                                   physics: const NeverScrollableScrollPhysics(),
                                                   itemCount: entry.value.length,
-                                                  gridDelegate:
-                                                  const SliverGridDelegateWithFixedCrossAxisCount(
+                                                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                                                     crossAxisCount: 3,
                                                     mainAxisSpacing: 12,
                                                     crossAxisSpacing: 12,
