@@ -1,8 +1,15 @@
+import 'dart:io';
+
 import 'package:dropdown_search/dropdown_search.dart';
 import 'package:flutter/material.dart';
+import 'package:polaris/utils/cache_utils.dart';
+import 'package:polaris/utils/java_utils.dart';
+import 'package:polaris/utils/persistent_widgets.dart';
+
 import 'utils/version_cache.dart';
 
 const String title = "Polaris Launcher";
+final prefs = PersistentPrefs.open();
 
 void main() {
   runApp(const CosmicReachLauncher());
@@ -71,20 +78,12 @@ class _LauncherHomeState extends State<LauncherHome> {
   Future<Map<String, Map<String, List<Map<String, String>>>>> fetchVersions() async {
     final aggregated = await VersionCache.fetchAllLoaders(
       loaderRepos: loaderRepos,
-      cacheDirPath: "caches/versions",
+      cacheDirPath: "${getPersistentCacheDir().path}/caches/versions",
       forceRefresh: false,
     );
 
     // Return in the exact format your UI expects
     return aggregated;
-  }
-
-
-  List<Map<String, String>> fetchJavaInstallations() { //TODO
-    return [
-      {"name": "Java 17", "path": "/usr/lib/jvm/java-17"},
-      {"name": "Java 20", "path": "/usr/lib/jvm/java-20"},
-    ];
   }
 
   Future<Map<String, String>?> askForInstanceDetails(BuildContext context) async {
@@ -196,7 +195,7 @@ class _LauncherHomeState extends State<LauncherHome> {
                           ),
                           const SizedBox(height: 12),
                           DropdownButtonFormField<String>(
-                            value: selectedLoader,
+                            initialValue: selectedLoader,
                             items: loaders
                                 .map((v) => DropdownMenuItem(value: v, child: Text(v)))
                                 .toList(),
@@ -284,7 +283,7 @@ class _LauncherHomeState extends State<LauncherHome> {
                     border: Border.all(color: Colors.white24),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.4),
+                        color: Colors.black.withValues(alpha: 0.4),
                         blurRadius: 8,
                         offset: const Offset(2, 2),
                       ),
@@ -297,7 +296,7 @@ class _LauncherHomeState extends State<LauncherHome> {
                         context,
                         icon: Icons.play_arrow,
                         label: "Play",
-                        hoverColor: Colors.green.withOpacity(0.15),
+                        hoverColor: Colors.green.withValues(alpha: 0.15),
                         highlightColor: Colors.green,
                         onTap: () {
                           overlayEntry?.remove();
@@ -344,7 +343,7 @@ class _LauncherHomeState extends State<LauncherHome> {
                         context,
                         icon: Icons.delete,
                         label: "Delete",
-                        hoverColor: Colors.red.withOpacity(0.15),
+                        hoverColor: Colors.red.withValues(alpha: 0.15),
                         highlightColor: Colors.red,
                         onTap: () {
                           overlayEntry?.remove();
@@ -480,7 +479,7 @@ class _LauncherHomeState extends State<LauncherHome> {
   );
 
   void _confirmDelete(BuildContext context, Map<String, String> instance) {
-    showDialog(
+    showDialog<void> (
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text("Confirm Delete"),
@@ -518,29 +517,29 @@ class _LauncherHomeState extends State<LauncherHome> {
     return; //TODO
   }
 
-  void _openSettings() {
-    showDialog(
+  Future<void> _openSettings() async {
+    final prefs = await PersistentPrefs.open();
+
+    if (!mounted) return;
+    await showDialog<void> (
       context: context,
       builder: (ctx) {
         int activeTab = 0;
-
-        final javaInstallations = fetchJavaInstallations();
-
         // Controllers & values
-        final TextEditingController appDirController = TextEditingController(text: "/path/to/app"); //TODO
-        final TextEditingController maxDownloadsController = TextEditingController(text: "3");
-        int maxDownloads = 3;
+        final TextEditingController appDirController = TextEditingController(text: getPersistentCacheDir().path);
+        final TextEditingController  maxDownloadsController = TextEditingController(text: prefs.getDouble('max_concurrent_downloads', defaultValue: 3).toString());
+        double? maxDownloads = double.tryParse(maxDownloadsController.text);
 
-        final TextEditingController maxWritesController = TextEditingController(text: "10");
-        int maxWrites = 10;
+        final TextEditingController maxWritesController = TextEditingController(text: prefs.getDouble('max_concurrent_writes', defaultValue: 10).toString());
+        double? maxWrites = double.tryParse(maxWritesController.text);
 
-        final TextEditingController minMemoryController = TextEditingController(text: "1024");
-        double minMemory = 1024;
-        final TextEditingController maxMemoryController = TextEditingController(text: "4096");
-        double maxMemory = 4096;
-        bool fullscreen = false;
-        final TextEditingController widthController = TextEditingController(text: "1280");
-        final TextEditingController heightController = TextEditingController(text: "720");
+        final TextEditingController minMemoryController = TextEditingController(text: prefs.getDouble('defaults_instance_memory_min', defaultValue: 1024).toString());
+        double? minMemory = double.tryParse(minMemoryController.text);
+        
+        final TextEditingController maxMemoryController = TextEditingController(text: prefs.getDouble('defaults_instance_memory_max', defaultValue: 4096).toString());
+        double? maxMemory = double.tryParse(maxMemoryController.text);
+        
+        bool fullscreen = prefs.getBool("defaults_instance_fullscreen", defaultValue: false);
 
         OutlineInputBorder darkGreyBorder = const OutlineInputBorder(
           borderSide: BorderSide(color: Colors.grey, width: 1),
@@ -558,7 +557,7 @@ class _LauncherHomeState extends State<LauncherHome> {
                   padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
                   decoration: selected
                       ? BoxDecoration(
-                    color: Colors.green.withOpacity(0.2),
+                    color: Colors.green.withValues(alpha: 0.2),
                     //Tab selection radius controls
                     borderRadius: const BorderRadius.horizontal(right: Radius.circular(12), left: Radius.circular(12)),
                   )
@@ -580,6 +579,7 @@ class _LauncherHomeState extends State<LauncherHome> {
               );
             }
 
+            //slider with controller
             Widget buildSliderWithController({
               required String label,
               required double value,
@@ -604,6 +604,54 @@ class _LauncherHomeState extends State<LauncherHome> {
                           onChanged: onChanged,
                           divisions: (max - min).toInt(),
                           activeColor: Colors.green,
+                        ),
+                      ),
+                      SizedBox(
+                        width: entryWidth,
+                        child: TextField(
+                          controller: controller,
+                          decoration: InputDecoration(
+                            border: darkGreyBorder,
+                            isDense: true,
+                          ),
+                          onSubmitted: (v) {
+                            final val = double.tryParse(v);
+                            if (val != null) onChanged(val.clamp(min, max));
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              );
+            }
+
+            Widget buildPersistentSliderWithController({
+              required String keyName,
+              required String label,
+              required double value,
+              required TextEditingController controller,
+              required double min,
+              required double max,
+              required ValueChanged<double> onChanged,
+              double entryWidth = 80,
+            }) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(label, style: const TextStyle(color: Colors.white)),
+                  Flex(
+                    direction: Axis.horizontal,
+                    children: [
+                      Expanded(
+                        child: PersistentSlider(
+                          value: value,
+                          min: min,
+                          max: max,
+                          onChanged: onChanged,
+                          divisions: (max - min).toInt(),
+                          activeColor: Colors.green,
+                          keyName: keyName,
                         ),
                       ),
                       SizedBox(
@@ -679,55 +727,63 @@ class _LauncherHomeState extends State<LauncherHome> {
                               child: Builder(builder: (_) {
                                 switch (activeTab) {
                                   case 0: // Java Installations
-                                    return Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Expanded(
-                                          child: ListView.builder(
-                                            itemCount: javaInstallations.length,
-                                            itemBuilder: (context, index) {
-                                              final java = javaInstallations[index];
-                                              return Padding(
-                                                padding: const EdgeInsets.symmetric(vertical: 8),
-                                                child: Column(
-                                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                                  children: [
-                                                    Text(java['name']!, style: const TextStyle(color: Colors.white)),
-                                                    const SizedBox(height: 4),
-                                                    TextField(
-                                                      readOnly: false,
-                                                      controller: TextEditingController(text: java['path']),
-                                                      decoration: const InputDecoration(
-                                                        border: OutlineInputBorder(),
-                                                      ),
-                                                    ),
-                                                    const SizedBox(height: 4),
-                                                    Row(
+                                    return FutureBuilder<List<Map<String, String>>>(
+                                      future: detectJavaInstallations(),
+                                      builder: (context, snapshot) {
+                                        if (snapshot.connectionState == ConnectionState.waiting) {
+                                          return const Center(child: CircularProgressIndicator());
+                                        }
+                                        if (snapshot.hasError) {
+                                          return Center(child: Text('Error: ${snapshot.error}'));
+                                        }
+                                        final javaInstallations = snapshot.data ?? [];
+                                        if (javaInstallations.isEmpty) {
+                                          return const Center(child: Text('No Java installations found.'));
+                                        }
+                                        return Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Expanded(
+                                              child: ListView.builder(
+                                                itemCount: javaInstallations.length,
+                                                itemBuilder: (context, index) {
+                                                  final java = javaInstallations[index];
+                                                  return Padding(
+                                                    padding: const EdgeInsets.symmetric(vertical: 8),
+                                                    child: Column(
+                                                      crossAxisAlignment: CrossAxisAlignment.start,
                                                       children: [
-                                                        ElevatedButton(onPressed: () {
-                                                          _installJavaVersion(java);
-                                                        }, child: const Text("Install")),
-                                                        const SizedBox(width: 4),
-                                                        ElevatedButton(onPressed: () {
-                                                          _findJavaVersion(java);
-                                                        }, child: const Text("Detect")),
-                                                        const SizedBox(width: 4),
-                                                        ElevatedButton(onPressed: () {
-                                                          _browseFolder(java['path']);
-                                                        }, child: const Text("Browse")),
-                                                        const SizedBox(width: 4),
-                                                        ElevatedButton(onPressed: () {
-                                                          _testJar(java);
-                                                        }, child: const Text("Test")),
+                                                        Text(java['name']!, style: const TextStyle(color: Colors.white, fontSize: 20)),
+                                                        const SizedBox(height: 4),
+                                                        TextField(
+                                                          controller: TextEditingController(text: java['path']),
+                                                          onChanged: (value) => java['path'] = value,
+                                                          decoration: const InputDecoration(
+                                                            border: OutlineInputBorder(),
+                                                          ),
+                                                        ),
+
+                                                        const SizedBox(height: 4),
+                                                        Row(
+                                                          children: [
+                                                            ElevatedButton.icon(
+                                                              onPressed: () => _browseFolder(java['path']),
+                                                              icon: const Icon(Icons.folder_open),
+                                                              label: const Text("Browse"),
+                                                            ),
+                                                            const SizedBox(width: 4),
+                                                            JavaTesterButton(java: java)
+                                                          ],
+                                                        ),
                                                       ],
                                                     ),
-                                                  ],
-                                                ),
-                                              );
-                                            },
-                                          ),
-                                        ),
-                                      ],
+                                                  );
+                                                },
+                                              ),
+                                            ),
+                                          ],
+                                        );
+                                      },
                                     );
                                   case 1:
                                   // Default Instance Options
@@ -738,8 +794,8 @@ class _LauncherHomeState extends State<LauncherHome> {
                                           const Text("Window Size", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                                           Row(
                                             children: [
-                                              Checkbox(value: fullscreen, onChanged: (v) => setState(() => fullscreen = v!)), //TODO implement
-                                              const Text("Fullscreen", style: TextStyle(color: Colors.white)),
+                                              PersistentCheckbox(value: fullscreen, onChanged: (v) => setState(() => fullscreen = v!), keyName: 'defaults_instance_fullscreen',),
+                                              const Text("Fullscreen", style: TextStyle(color: Colors.white)), //TODO
                                             ],
                                           ),
                                           const SizedBox(height: 8),
@@ -747,26 +803,26 @@ class _LauncherHomeState extends State<LauncherHome> {
                                             direction: Axis.horizontal,
                                             children: [
                                               Expanded(
-                                                child: TextField(
-                                                  controller: widthController,
+                                                child: PersistentTextField(
                                                   enabled: !fullscreen,
-                                                  decoration: InputDecoration(labelText: "Width", border: darkGreyBorder), //TODO
+                                                  decoration: InputDecoration(labelText: "Width", border: darkGreyBorder),
+                                                  keyName: 'defaults_instance_width', //TODO
                                                 ),
                                               ),
                                               const SizedBox(width: 8),
                                               Expanded(
-                                                child: TextField(
-                                                  controller: heightController,
+                                                child: PersistentTextField(
                                                   enabled: !fullscreen,
-                                                  decoration: InputDecoration(labelText: "Height", border: darkGreyBorder), //TODO
+                                                  decoration: InputDecoration(labelText: "Height", border: darkGreyBorder),
+                                                  keyName: 'defaults_instance_height', //TODO
                                                 ),
                                               ),
                                             ],
                                           ),
                                           const SizedBox(height: 16),
-                                          buildSliderWithController(
+                                          buildPersistentSliderWithController(
                                             label: "Min Memory (MB)",
-                                            value: minMemory,
+                                            value: minMemory!.toDouble(),
                                             controller: minMemoryController,
                                             min: 256,
                                             max: 16384,
@@ -775,11 +831,12 @@ class _LauncherHomeState extends State<LauncherHome> {
                                               minMemoryController.text = v.toInt().toString(); //TODO
                                             }),
                                             entryWidth: 100,
+                                            keyName: 'defaults_instance_memory_min',
                                           ),
                                           const SizedBox(height: 8),
-                                          buildSliderWithController(
+                                          buildPersistentSliderWithController(
                                             label: "Max Memory (MB)",
-                                            value: maxMemory,
+                                            value: maxMemory!.toDouble(),
                                             controller: maxMemoryController,
                                             min: 256,
                                             max: 16384,
@@ -788,20 +845,21 @@ class _LauncherHomeState extends State<LauncherHome> {
                                               maxMemoryController.text = v.toInt().toString(); //TODO
                                             }),
                                             entryWidth: 100,
+                                            keyName: 'defaults_instance_memory_max',
                                           ),
                                           const SizedBox(height: 16),
-                                          TextField(
+                                          PersistentTextField(
                                             decoration: InputDecoration(
                                               labelText: "Java Arguments", //TODO
                                               border: darkGreyBorder,
-                                            ),
+                                            ), keyName: 'defaults_instance_args',
                                           ),
                                           const SizedBox(height: 8),
-                                          TextField(
+                                          PersistentTextField(
                                             decoration: InputDecoration(
                                               labelText: "Environment Variables", //TODO
                                               border: darkGreyBorder,
-                                            ),
+                                            ), keyName: 'defaults_instance_vars',
                                           ),
                                         ],
                                       ),
@@ -819,13 +877,13 @@ class _LauncherHomeState extends State<LauncherHome> {
                                                 child: TextField(
                                                   controller: appDirController,
                                                   decoration: InputDecoration(
-                                                    labelText: "App Directory", //TODO
+                                                    labelText: "App Directory",
                                                     border: darkGreyBorder,
                                                   ),
                                                 ),
                                               ),
                                               IconButton(icon: const Icon(Icons.folder_open), onPressed: () {
-                                                //TODO
+                                                _browseFolder(appDirController.text);
                                                 }),
                                             ],
                                           ),
@@ -833,33 +891,35 @@ class _LauncherHomeState extends State<LauncherHome> {
                                           Row(
                                             children: [
                                               ElevatedButton(onPressed: () {
-                                                _purgeCache();
+                                                deleteCaches();
                                               }, child: const Text("Purge Cache")),
                                             ],
                                           ),
                                           const SizedBox(height: 16),
-                                          buildSliderWithController(
+                                          buildPersistentSliderWithController(
                                             label: "Max Concurrent Downloads",
-                                            value: maxDownloads.toDouble(),
+                                            value: maxDownloads!.toDouble(),
                                             controller: maxDownloadsController,
                                             min: 1,
                                             max: 10,
                                             onChanged: (v) => setState(() {
-                                              maxDownloads = v.toInt();
-                                              maxDownloadsController.text = maxDownloads.toString(); //TODO
+                                              maxDownloads = v.toDouble();
+                                              maxDownloadsController.text = maxDownloads!.toInt().toString(); //TODO
                                             }),
+                                            keyName: 'max_concurrent_downloads',
                                           ),
                                           const SizedBox(height: 8),
-                                          buildSliderWithController(
+                                          buildPersistentSliderWithController(
                                             label: "Max Concurrent Writes",
-                                            value: maxWrites.toDouble(),
+                                            value: maxWrites!.toDouble(),
                                             controller: maxWritesController,
                                             min: 1,
                                             max: 50,
                                             onChanged: (v) => setState(() {
-                                              maxWrites = v.toInt();
-                                              maxWritesController.text = maxWrites.toString(); //TODO
+                                              maxWrites = v.toDouble();
+                                              maxWritesController.text = maxWrites!.toInt().toString(); //TODO
                                             }),
+                                            keyName: 'max_concurrent_writes',
                                           ),
                                         ],
                                       ),
@@ -1038,7 +1098,7 @@ class _LauncherHomeState extends State<LauncherHome> {
                           Text(
                             instances.isEmpty
                                 ? "No instances running"
-                                : "${instances.length} instance(s) running",
+                                : "${instances.length} instance(s) running",//TODO
                             style: const TextStyle(fontSize: 14),
                           ),
                         ],
@@ -1207,23 +1267,21 @@ class _LauncherHomeState extends State<LauncherHome> {
     );
   }
 
-  void _installJavaVersion(Map<String, String> java) {//TODO
-    return;
-  }
+  Future<void> _browseFolder(String? path) async {
+    final dir = Directory(path!);
+    if (!await dir.exists()) {
+      throw Exception('Directory does not exist: $path');
+    }
 
-  void _findJavaVersion(Map<String, String> java) {//TODO
-    return;
-  }
-
-  void _browseFolder(String? java) {//TODO
-    return;
-  }
-
-  void _testJar(Map<String, String> java) {//TODO
-    return;
-  }
-
-  void _purgeCache() {//TODO
+    if (Platform.isWindows) {
+      await Process.start('explorer', [dir.path]);
+    } else if (Platform.isMacOS) {
+      await Process.start('open', [dir.path]);
+    } else if (Platform.isLinux) {
+      await Process.start('xdg-open', [dir.path]);
+    } else {
+      throw UnsupportedError('Unsupported platform: ${Platform.operatingSystem}');
+    }
     return;
   }
 }
