@@ -57,15 +57,28 @@ class _LauncherHomeState extends State<LauncherHome> {
     });
   }
 
+  //Loaders
+  final loaderRepos = {
+    "Vanilla": {
+      "Client": "PuzzlesHQ/CRArchive/main"
+    },
+    "Puzzle": {
+      "Core": "PuzzlesHQ/puzzle-loader-core/versioning",
+      "Cosmic": "PuzzlesHQ/puzzle-loader-cosmic/versioning",
+    }
+  };
 
-  Map<String, Map<String, List<String>>> fetchModdedVersions() { //TODO
-    return {
-      "Puzzle": {
-        "Core": ["latest", "3.0.5", "last"],
-        "Cosmic": ["latest", "5.0.5", "last"]},
-      "Quilt": {
-        "Loom": ["latest", "1.5", "last"]}};
+  Future<Map<String, Map<String, List<Map<String, String>>>>> fetchVersions() async {
+    final aggregated = await VersionCache.fetchAllLoaders(
+      loaderRepos: loaderRepos,
+      cacheDirPath: "caches/versions",
+      forceRefresh: false,
+    );
+
+    // Return in the exact format your UI expects
+    return aggregated;
   }
+
 
   List<Map<String, String>> fetchJavaInstallations() { //TODO
     return [
@@ -77,14 +90,11 @@ class _LauncherHomeState extends State<LauncherHome> {
   Future<Map<String, String>?> askForInstanceDetails(BuildContext context) async {
     final TextEditingController nameController = TextEditingController();
     String selectedVersion = "latest";
-    final versions = {for (var v in (await VersionCache.fetchVersions(owner: "PuzzlesHQ", repo: "CRArchive", cacheFilePath: "caches/version_cache.json"))['versions'] as List) if (v['client']?['url'] != null) v['id'] as String: v['client']['url'] as String};
 
-
-
-    final loaders = ["Vanilla", "Puzzle", "Quilt"];
+    final loaders = loaderRepos.keys.toList();
     String selectedLoader = loaders.first;
 
-    final moddedVersions = fetchModdedVersions();
+    Future<Map<String, Map<String, List<Map<String, String>>>>> versionsFuture = fetchVersions();
     final Map<String, String> selectedSubVersions = {};
 
     // Shared dimensions for both pages
@@ -127,69 +137,77 @@ class _LauncherHomeState extends State<LauncherHome> {
             void goBack() => setState(() => onSubVersionPage = false);
 
             return AlertDialog(
-              title: Text(onSubVersionPage
-                  ? "$selectedLoader Versions"
-                  : "New Instance"),
+              title: Text(onSubVersionPage ? "$selectedLoader Versions" : "New Instance"),
               content: ConstrainedBox(
                 constraints: const BoxConstraints(
                   maxWidth: dialogWidth,
                   maxHeight: dialogMaxHeight,
                 ),
                 child: SingleChildScrollView(
-                  child: onSubVersionPage
-                      ? Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      for (final modType
-                      in (moddedVersions[selectedLoader]?.keys ?? []))
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: buildDropdown(
-                            label: "$modType Version",
-                            items: moddedVersions[selectedLoader]![modType]!,
-                            selected: selectedSubVersions[modType] ??
-                                moddedVersions[selectedLoader]![modType]!
-                                    .first,
-                              onChanged: (v) =>
-                                  setState(() => selectedSubVersions[modType as String] = v)
+                  child: FutureBuilder<Map<String, Map<String, List<Map<String, String>>>>>(
+                    future: versionsFuture,
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const CircularProgressIndicator();
+                      }
+                      if (snapshot.hasError) {
+                        return Text('Error: ${snapshot.error}', style: const TextStyle(color: Colors.red));
+                      }
+                      if (!snapshot.hasData) {
+                        return const Text('No data found.');
+                      }
+                      final data = snapshot.data!;
+
+                      return Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: onSubVersionPage
+                            ? [
+                          for (final modType in data[selectedLoader]?.keys ?? [])
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 12),
+                              child: buildDropdown(
+                                label: "$modType Version",
+                                items: (data[selectedLoader]?[modType] ?? [])
+                                    .map((versionMap) => versionMap.keys.first)
+                                    .toList(),
+                                selected: selectedSubVersions[modType] ??
+                                    (((data[selectedLoader]?[modType] ?? []).isNotEmpty)
+                                        ? (data[selectedLoader]![modType]!.first.keys.first)
+                                        : ""),
+                                onChanged: (v) => setState(() => selectedSubVersions[modType as String] = v),
+                              ),
                             ),
-                        ),
-                    ],
-                  )
-                      : Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      TextField(
-                        controller: nameController,
-                        decoration:
-                        const InputDecoration(labelText: "Instance Name"),
-                        autofocus: true,
-                        maxLength: 40,
-                      ),
-                      const SizedBox(height: 12),
-                      buildDropdown(
-                        label: "Game Version",
-                        items: versions.keys.toList(),
-                        selected: selectedVersion,
-                        onChanged: (v) =>
-                            setState(() => selectedVersion = v),
-                      ),
-                      const SizedBox(height: 12),
-                      DropdownButtonFormField<String>(
-                        initialValue: selectedLoader,
-                        items: loaders
-                            .map((v) =>
-                            DropdownMenuItem(value: v, child: Text(v)))
-                            .toList(),
-                        onChanged: (value) {
-                          if (value != null) {
-                            setState(() => selectedLoader = value);
-                          }
-                        },
-                        decoration:
-                        const InputDecoration(labelText: "Loader"),
-                      ),
-                    ],
+                        ]
+                            : [
+                          TextField(
+                            controller: nameController,
+                            decoration: const InputDecoration(labelText: "Instance Name"),
+                            autofocus: true,
+                            maxLength: 40,
+                          ),
+                          const SizedBox(height: 12),
+                          buildDropdown(
+                            label: "Game Version",
+                            items: (data['Vanilla']?['Client'] as List<dynamic>?)
+                                ?.map((v) => v.keys.first as String)
+                                .toList() ?? [],
+                            selected: selectedVersion,
+                            onChanged: (v) => setState(() => selectedVersion = v),
+                          ),
+                          const SizedBox(height: 12),
+                          DropdownButtonFormField<String>(
+                            value: selectedLoader,
+                            items: loaders
+                                .map((v) => DropdownMenuItem(value: v, child: Text(v)))
+                                .toList(),
+                            onChanged: (value) {
+                              if (value != null) setState(() => selectedLoader = value);
+                            },
+                            decoration: const InputDecoration(labelText: "Loader"),
+                          ),
+                        ],
+                      );
+                    },
                   ),
                 ),
               ),
@@ -197,9 +215,7 @@ class _LauncherHomeState extends State<LauncherHome> {
                 if (onSubVersionPage)
                   TextButton(onPressed: goBack, child: const Text("Back"))
                 else
-                  TextButton(
-                      onPressed: () => Navigator.pop(ctx, null),
-                      child: const Text("Cancel")),
+                  TextButton(onPressed: () => Navigator.pop(ctx, null), child: const Text("Cancel")),
                 ElevatedButton(
                   onPressed: () {
                     if (!onSubVersionPage && selectedLoader != "Vanilla") {
@@ -221,14 +237,13 @@ class _LauncherHomeState extends State<LauncherHome> {
                       "loader": selectedLoader,
                     });
                   },
-                  child: Text(onSubVersionPage
-                      ? "Create" //TODO save to json
-                      : (selectedLoader == "Vanilla" ? "Create" : "Next")),
+                  child: Text(onSubVersionPage ? "Create" : (selectedLoader == "Vanilla" ? "Create" : "Next")),
                 ),
               ],
             );
           },
         );
+
       },
     );
   }
@@ -1098,14 +1113,13 @@ class _LauncherHomeState extends State<LauncherHome> {
                                     child: FutureBuilder<List<Map<String, String>>>(
                                       future: getProcessedInstances(),
                                       builder: (context, snapshot) {
-                                        if (snapshot.connectionState == ConnectionState.waiting) {
+                                        if (snapshot.connectionState != ConnectionState.done) {
                                           return const Center(child: CircularProgressIndicator());
                                         }
                                         if (snapshot.hasError) {
                                           return Center(child: Text('Error: ${snapshot.error}'));
                                         }
-
-                                        final list = snapshot.data ?? [];
+                                        final list = snapshot.data ?? <Map<String, String>>[];
 
                                         if (groupBy == 'None') {
                                           // Simple grid when not grouped
