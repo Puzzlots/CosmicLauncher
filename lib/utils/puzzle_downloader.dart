@@ -1,21 +1,16 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:polaris/utils/cache_utils.dart';
-import 'package:polaris/utils/version_cache.dart';
 
 Future<void> downloadPuzzleVersion(
-    String unresolvedCoreVersion,
-    String unresolvedCosmicVersion,
+    String coreVersion,
+    String cosmicVersion,
     Map<String, Map<String, List<Map<String, String>>>> aggregated,
     ) async {
   final libDir = Directory("${getPersistentCacheDir().path}/puzzle_runtime");
   await libDir.create(recursive: true);
-
-  final coreVersion = resolveLatest(aggregated, "Puzzle", "Core", unresolvedCoreVersion);
-  final cosmicVersion = resolveLatest(aggregated, "Puzzle", "Cosmic", unresolvedCosmicVersion);
-  print("Core: $coreVersion");
-  print("Cosmic: $cosmicVersion");
 
   final coreClientJar = "puzzle-loader-core-$coreVersion-client.jar";
   final coreCommonJar = "puzzle-loader-core-$coreVersion-common.jar";
@@ -25,49 +20,65 @@ Future<void> downloadPuzzleVersion(
   String jitpackUrl(String artifact) =>
       "https://jitpack.io/com/github/PuzzlesHQ/$artifact/$artifact";
 
-  final dependenciesJsonUrl =
-      "https://github.com/PuzzlesHQ/puzzle-loader-cosmic/releases/download/$cosmicVersion/dependencies.json";
-
-  await downloadJars([
+  final urls = [
     [coreClientJar, jitpackUrl("puzzle-loader-core/$coreClientJar")],
     [coreCommonJar, jitpackUrl("puzzle-loader-core/$coreCommonJar")],
     [cosmicClientJar, jitpackUrl("puzzle-loader-cosmic/$cosmicClientJar")],
-    [cosmicCommonJar, jitpackUrl("puzzle-loader-cosmic/$cosmicCommonJar")]
-  ], libDir);
+    [cosmicCommonJar, jitpackUrl("puzzle-loader-cosmic/$cosmicCommonJar")],
+  ];
 
-  final depsJsonResp = await http.get(Uri.parse(dependenciesJsonUrl));
-  if (depsJsonResp.statusCode != 200) {
-    throw Exception("failed to download dependencies.json");
-  }
-  final depsData = json.decode(depsJsonResp.body);
-  final repos = List<String>.from(
-      (depsData['repos'] as List).map((e) => e['url'] as String)
-  );
+  await downloadJars(urls, libDir);
 
-  final allDeps = [...(depsData['common'] as List), ...(depsData['client'] as List)];
+  final coreDepsData = await fetchJson("https://github.com/PuzzlesHQ/puzzle-loader-core/releases/download/$coreVersion/dependencies.json");
+  final cosmicDepsData = await fetchJson("https://github.com/PuzzlesHQ/puzzle-loader-cosmic/releases/download/$cosmicVersion/dependencies.json");
 
+  final repos = [
+    ...List<String>.from((coreDepsData['repos'] as List).map((e) => e['url'])),
+    ...List<String>.from((cosmicDepsData['repos'] as List).map((e) => e['url'])),
+  ];
+
+  final allDeps = [
+    ...(coreDepsData['common'] as List),
+    ...(coreDepsData['client'] as List),
+    ...(cosmicDepsData['common'] as List),
+    ...(cosmicDepsData['client'] as List),
+  ].where((e) => e['type'] == 'implementation').toList();
 
   for (final dep in allDeps) {
-    final group = dep['groupId'];
-    final artifact = dep['artifactId'];
-    final version = dep['version'];
+    final group = dep['groupId'] as String;
+    final artifact = dep['artifactId'] as String;
+    final version = dep['version'] as String;
+
+    final file = File("${libDir.path}/$artifact-$version.jar");
+    if (await file.exists()) continue;
+
     bool downloaded = false;
+
     for (final repo in repos) {
-      final url = mavenUrl(repo, group as String, artifact as String, version as String);
-      final file = File("${libDir.path}/$artifact-$version.jar");
-      if (await file.exists()) {
-        downloaded = true;
-        break;
-      }
+      final url = buildDependencyUrlForRepo(repo, group, artifact, version);
+
       if (await tryDownload(url, file)) {
         downloaded = true;
         break;
       }
     }
+
     if (!downloaded) {
-      throw Exception("failed to download $group:$artifact:$version");
+      if (kDebugMode) {
+        print("[Exception] failed to download $group:$artifact:$version");
+      } else {
+        throw Exception("failed to download $group:$artifact:$version");
+      }
     }
   }
+}
+
+Future<Map<String, dynamic>> fetchJson(String url) async {
+  final resp = await http.get(Uri.parse(url));
+  if (resp.statusCode != 200) {
+    throw Exception("failed to download $url");
+  }
+  return json.decode(resp.body) as Map<String, dynamic>;
 }
 
 Future<void> downloadJars(List<List<String>> files, Directory libDir) async {
@@ -91,7 +102,14 @@ Future<bool> tryDownload(String url, File target) async {
   return false;
 }
 
-String mavenUrl(String repo, String group, String artifact, String version) {
+String buildDependencyUrlForRepo(String repo, String group, String artifact, String version) {
+  if (repo.contains("jitpack.io")) {
+    final ownerRepo = "${group.replaceFirst("com.github.", "")}/$artifact";
+    return "https://jitpack.io/com/github/$ownerRepo/$version/$artifact-$version.jar";
+  }
+
   final g = group.replaceAll('.', '/');
+  if (!repo.endsWith('/')) repo += '/';
   return "$repo$g/$artifact/$version/$artifact-$version.jar";
 }
+

@@ -54,7 +54,7 @@ Future<void> deleteCaches({String appName = title}) async {
 
 class PersistentPrefs {
   final File _file;
-  Map<String, dynamic> _cache = {};
+  final Map<String, dynamic> _cache;
   Timer? _debounce;
 
   PersistentPrefs._(this._file, this._cache);
@@ -87,7 +87,6 @@ class PersistentPrefs {
       }();
     }
   }
-
 
   // setters
   Future<void> setValue(String key, dynamic value) async {

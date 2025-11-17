@@ -143,14 +143,13 @@ class VersionCache {
   }
 }
 
-String resolveLatest(Map<String, Map<String, List<Map<String, String>>>> aggregated, String loader, String modType, String version) {
-  if (version != "latest") return version;
+String resolveLatest(Map<String, Map<String, List<Map<String, String>>>> aggregated, String loader, String modType, String? version) {
+  if (version != "latest" && version != null) return version;
 
   final list = aggregated[loader]?[modType];
   if (list == null || list.isEmpty) {
     throw StateError("No versions available for $loader/$modType");
   }
 
-  final first = list.first;
-  return first.keys.first;
+  return (list.length > 1 ? list[1] : list.first).keys.first;
 }

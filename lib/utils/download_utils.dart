@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 Future<void> downloadFile(String url, String savePath) async {
@@ -9,9 +10,13 @@ Future<void> downloadFile(String url, String savePath) async {
   if (response.statusCode == 200) {
     final file = File(savePath);
     await file.writeAsBytes(response.bodyBytes);
-    print('File downloaded to $savePath');
+    if (kDebugMode) {
+      print('File downloaded to $savePath');
+    }
   } else {
-    print('Failed to download file: ${response.statusCode}');
+    if (kDebugMode) {
+      print('Failed to download file: ${response.statusCode}');
+    }
   }
 }
 

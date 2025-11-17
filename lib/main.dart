@@ -1,15 +1,14 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:dropdown_search/dropdown_search.dart';
 import 'package:flutter/material.dart';
 import 'package:nanoid/nanoid.dart';
 import 'package:polaris/utils/cache_utils.dart';
+import 'package:polaris/utils/general_utils.dart';
 import 'package:polaris/utils/instance_utils.dart';
 import 'package:polaris/utils/java_utils.dart';
 import 'package:polaris/utils/persistent_widgets.dart';
 import 'package:polaris/utils/puzzle_downloader.dart';
-import 'package:polaris/utils/general_utils.dart';
 
 import 'utils/version_cache.dart';
 
@@ -229,6 +228,8 @@ class _LauncherHomeState extends State<LauncherHome> {
                   TextButton(onPressed: () => Navigator.pop(ctx, null), child: const Text("Cancel")),
                 ElevatedButton(
                   onPressed: () async {
+                    final navigator = Navigator.of(ctx);
+                    final messenger = ScaffoldMessenger.of(context);
                     if (!onSubVersionPage && selectedLoader != "Vanilla") {
                       goToSubVersionPage();
                       return;
@@ -241,21 +242,25 @@ class _LauncherHomeState extends State<LauncherHome> {
                       "loader": selectedLoader,
                     };
 
-                    if (selectedSubVersions.isNotEmpty) {
+                    if (selectedLoader == "Puzzle") {
                       loaderInfo.addEntries(selectedSubVersions.entries);
-                    }
+                      loaderInfo.addAll({"versions": "$versionInfo | ${selectedSubVersions.entries.map((e) => "${e.key}:${e.value}").join(", ")}"});
 
-                    Navigator.pop(ctx, loaderInfo);
-                    if (selectedLoader == "puzzle") {
-                      try {
-                        await downloadPuzzleVersion(loaderInfo['Core']!, loaderInfo['Cosmic']!, currentVersions);
-                      } catch (e) {
-                        ScaffoldMessenger.of(context).showSnackBar(
+                      loaderInfo['Core'] = resolveLatest(currentVersions, "Puzzle", "Core", loaderInfo['Core']);
+                      loaderInfo['Cosmic'] = resolveLatest(currentVersions, "Puzzle", "Cosmic", loaderInfo['Cosmic']);
+
+                      unawaited(downloadPuzzleVersion(
+                        loaderInfo['Core']!,
+                        loaderInfo['Cosmic']!,
+                        currentVersions,
+                      ).catchError((dynamic e) {
+                        messenger.showSnackBar(
                           SnackBar(content: Text("Failed to download Puzzle: $e")),
                         );
-                        return;
-                      }
-                    }
+                      }));
+
+                    } else {loaderInfo.addEntries(selectedSubVersions.entries);}
+                    navigator.pop(loaderInfo);
                   },
                   child: Text(onSubVersionPage ? "Create" : (selectedLoader == "Vanilla" ? "Create" : "Next")),
                 ),
@@ -302,28 +307,41 @@ class _LauncherHomeState extends State<LauncherHome> {
   }
 
 
+  OverlayEntry? _activeOverlay;
   Widget _buildInstanceCard(BuildContext context, Map<String, String> instance) {
     bool hovering = false;
-    OverlayEntry? overlayEntry;
-    final overlay = Overlay.of(context);
 
     void showContextMenu(Offset position) {
-      overlayEntry = OverlayEntry(
+      _activeOverlay?.remove();
+      _activeOverlay = null;
+
+      final overlaySize = 180.0;
+      final screenSize = MediaQuery.of(context).size;
+
+      double left = position.dx;
+      double top = position.dy;
+      if (left + overlaySize > screenSize.width) left = screenSize.width - overlaySize - 8;
+      if (top + 300 > screenSize.height) top = screenSize.height - 300 - 8;
+
+      _activeOverlay = OverlayEntry(
         builder: (context) => Stack(
           children: [
             Positioned.fill(
               child: GestureDetector(
-                onTap: () => overlayEntry?.remove(),
+                onTap: () {
+                  _activeOverlay?.remove();
+                  _activeOverlay = null;
+                },
                 behavior: HitTestBehavior.translucent,
               ),
             ),
             Positioned(
-              left: position.dx,
-              top: position.dy,
+              left: left,
+              top: top,
               child: Material(
                 color: Colors.transparent,
                 child: Container(
-                  width: 180,
+                  width: overlaySize,
                   decoration: BoxDecoration(
                     color: const Color(0xFF1E1E1E),
                     borderRadius: BorderRadius.circular(8),
@@ -346,7 +364,8 @@ class _LauncherHomeState extends State<LauncherHome> {
                         hoverColor: Colors.green.withValues(alpha: 0.15),
                         highlightColor: Colors.green,
                         onTap: () {
-                          overlayEntry?.remove();
+                          _activeOverlay?.remove();
+                          _activeOverlay = null;
                           _launchInstance(instance);
                         },
                       ),
@@ -354,7 +373,11 @@ class _LauncherHomeState extends State<LauncherHome> {
                         context,
                         icon: Icons.add_circle_outline,
                         label: "Add Content",
-                        onTap: () => overlayEntry?.remove(), //TODO
+                        onTap: () {
+                          _activeOverlay?.remove();
+                          _activeOverlay = null;
+                          // TODO
+                        },
                       ),
                       _contextDivider(),
                       _contextItem(
@@ -363,7 +386,8 @@ class _LauncherHomeState extends State<LauncherHome> {
                         label: "Duplicate Instance",
                         onTap: () {
                           _addInstance(details: instance);
-                          overlayEntry?.remove();
+                          _activeOverlay?.remove();
+                          _activeOverlay = null;
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(content: Text("Duplicated instance")),
                           );
@@ -375,8 +399,9 @@ class _LauncherHomeState extends State<LauncherHome> {
                         label: "Open Folder",
                         onTap: () {
                           revealFile(instanceManager.getInstanceFilePath(instance['uuid']!));
-                          overlayEntry?.remove();
-                          },
+                          _activeOverlay?.remove();
+                          _activeOverlay = null;
+                        },
                       ),
                       _contextItem(
                         context,
@@ -384,7 +409,8 @@ class _LauncherHomeState extends State<LauncherHome> {
                         label: "Copy Path",
                         onTap: () {
                           copyToClipboard(instanceManager.getInstanceFilePath(instance['uuid']!));
-                          overlayEntry?.remove();
+                          _activeOverlay?.remove();
+                          _activeOverlay = null;
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(content: Text("Path copied to clipboard")),
                           );
@@ -398,7 +424,8 @@ class _LauncherHomeState extends State<LauncherHome> {
                         hoverColor: Colors.red.withValues(alpha: 0.15),
                         highlightColor: Colors.red,
                         onTap: () {
-                          overlayEntry?.remove();
+                          _activeOverlay?.remove();
+                          _activeOverlay = null;
                           _confirmDelete(context, instance);
                         },
                       ),
@@ -410,7 +437,8 @@ class _LauncherHomeState extends State<LauncherHome> {
           ],
         ),
       );
-      overlay.insert(overlayEntry!);
+
+      Overlay.of(context).insert(_activeOverlay!);
     }
 
     return KeyedSubtree(
@@ -550,6 +578,7 @@ class _LauncherHomeState extends State<LauncherHome> {
             onPressed: () {
               setState(() {
                 instances.remove(instance);@override
+                // ignore: unused_element
                 void initState() {
                   super.initState();
                   _loadInstances();
@@ -558,7 +587,6 @@ class _LauncherHomeState extends State<LauncherHome> {
               });
               Navigator.pop(ctx);
 
-              // Safe: use scaffold key
               _scaffoldMessengerKey.currentState?.showSnackBar(
                 SnackBar(content: Text("${instance['name']} deleted")),
               );
@@ -637,6 +665,7 @@ class _LauncherHomeState extends State<LauncherHome> {
             }
 
             //slider with controller
+            // ignore: unused_element
             Widget buildSliderWithController({
               required String label,
               required double value,
