@@ -35,17 +35,17 @@ class _PersistentCheckboxState extends State<PersistentCheckbox> {
 
   Future<void> _initPrefs() async {
     _prefs = await PersistentPrefs.open(appName: widget.appName);
-    final saved = _prefs.getBool(widget.keyName, defaultValue: widget.value ?? false);
+    final saved = _prefs.getValue(widget.keyName, defaultValue: widget.value ?? false);
     setState(() {
       _value = saved;
       _loaded = true;
     });
   }
 
-  void _onChanged(bool? v) async {
+  Future<void> _onChanged(bool? v) async {
     if (v == null) return;
     setState(() => _value = v);
-    await _prefs.setBool(widget.keyName, v);
+    await _prefs.setValue(widget.keyName, v);
     widget.onChanged?.call(v);
   }
 
@@ -91,16 +91,16 @@ class _PersistentSwitchState extends State<PersistentSwitch> {
 
   Future<void> _initPrefs() async {
     _prefs = await PersistentPrefs.open(appName: widget.appName);
-    final saved = _prefs.getBool(widget.keyName, defaultValue: widget.value ?? false);
+    final saved = _prefs.getValue(widget.keyName, defaultValue: widget.value ?? false);
     setState(() {
       _value = saved;
       _loaded = true;
     });
   }
 
-  void _onChanged(bool v) async {
+  Future<void> _onChanged(bool v) async {
     setState(() => _value = v);
-    await _prefs.setBool(widget.keyName, v);
+    await _prefs.setValue(widget.keyName, v);
     widget.onChanged?.call(v);
   }
 
@@ -154,16 +154,16 @@ class _PersistentSliderState extends State<PersistentSlider> {
 
   Future<void> _initPrefs() async {
     _prefs = await PersistentPrefs.open(appName: widget.appName);
-    final saved = _prefs.getDouble(widget.keyName, defaultValue: widget.value ?? widget.min);
+    final saved = _prefs.getValue(widget.keyName, defaultValue: widget.value ?? widget.min);
     setState(() {
       _value = saved;
       _loaded = true;
     });
   }
 
-  void _onChanged(double v) async {
+  Future<void> _onChanged(double v) async {
     setState(() => _value = v);
-    await _prefs.setDouble(widget.keyName, v);
+    await _prefs.setValue(widget.keyName, v);
     widget.onChanged?.call(v);
   }
 
@@ -218,8 +218,8 @@ class _PersistentNumericFieldState extends State<PersistentNumericField> {
     _prefs = await PersistentPrefs.open(appName: widget.appName);
 
     final initial = widget.allowDouble
-        ? _prefs.getDouble(widget.keyName, defaultValue: widget.value?.toDouble() ?? 0.0).toString()
-        : _prefs.getInt(widget.keyName, defaultValue: widget.value?.toInt() ?? 0).toString();
+        ? _prefs.getValue(widget.keyName, defaultValue: widget.value?.toDouble() ?? 0.0).toString()
+        : _prefs.getValue(widget.keyName, defaultValue: widget.value?.toInt() ?? 0).toString();
 
     _controller.text = initial;
 
@@ -229,11 +229,11 @@ class _PersistentNumericFieldState extends State<PersistentNumericField> {
       try {
         if (widget.allowDouble) {
           final val = double.parse(text);
-          await _prefs.setDouble(widget.keyName, val);
+          await _prefs.setValue(widget.keyName, val);
           widget.onChanged?.call(val);
         } else {
           final val = int.parse(text);
-          await _prefs.setInt(widget.keyName, val);
+          await _prefs.setValue(widget.keyName, val);
           widget.onChanged?.call(val);
         }
       } catch (_) {}
@@ -289,11 +289,11 @@ class _PersistentTextFieldState extends State<PersistentTextField> {
 
   Future<void> _initPrefs() async {
     _prefs = await PersistentPrefs.open(appName: widget.appName);
-    final saved = _prefs.getString(widget.keyName, defaultValue: _controller.text);
+    final saved = _prefs.getValue(widget.keyName, defaultValue: _controller.text);
     if (_controller.text.isEmpty) _controller.text = saved;
 
     _controller.addListener(() async {
-      await _prefs.setString(widget.keyName, _controller.text);
+      await _prefs.setValue(widget.keyName, _controller.text);
       widget.onChanged?.call(_controller.text);
     });
 

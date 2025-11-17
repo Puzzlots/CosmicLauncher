@@ -3,93 +3,154 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 
 class VersionCache {
-  /// Fetch all loaders/mod types and aggregate into { loader: { modType: [ {version: url}, ... ] } }
-  static Future<Map<String, Map<String, List<Map<String, String>>>>> fetchAllLoaders({
+  /// Fetch versions: serve cached immediately, then update with remote if newer
+  static Future<Map<String, Map<String, List<Map<String, String>>>>> fetchVersions({
     required Map<String, Map<String, String>> loaderRepos,
     required String cacheDirPath,
-    bool forceRefresh = false,
+    required void Function(Map<String, Map<String, List<Map<String, String>>>>) onUpdate,
   }) async {
     final aggregated = <String, Map<String, List<Map<String, String>>>>{};
 
+    // 1️⃣ Load cached versions immediately
     for (final loaderEntry in loaderRepos.entries) {
       final loader = loaderEntry.key;
       aggregated[loader] = {};
-
       for (final modTypeEntry in loaderEntry.value.entries) {
         final modType = modTypeEntry.key;
-        final repo = modTypeEntry.value;
-
         final cacheFile = File('$cacheDirPath/$loader-$modType.json');
-        Map<String, dynamic>? data;
-
-        if (!forceRefresh && cacheFile.existsSync()) {
+        Map<String, dynamic>? localData;
+        if (cacheFile.existsSync()) {
           try {
-            data = jsonDecode(await cacheFile.readAsString()) as Map<String, dynamic>;
-          } catch (_) {
-            data = null;
-          }
+            localData = jsonDecode(cacheFile.readAsStringSync()) as Map<String, dynamic>;
+          } catch (_) {}
         }
-
-        if (data == null) {
-          final url = 'https://raw.githubusercontent.com/$repo/versions.json';
-          final response = await http.get(Uri.parse(url));
-          if (response.statusCode != 200) continue;
-
-          data = jsonDecode(response.body) as Map<String, dynamic>;
-          await cacheFile.parent.create(recursive: true);
-          await cacheFile.writeAsString(jsonEncode(data));
-        }
-
-        final dynamic versionsRaw = data['versions'];
-        final List<Map<String, String>> versionList = [];
-
-        if (versionsRaw is List) {
-          // CRArchive-style format: list of objects with id/client/server fields
-          final sortedList = versionsRaw
-              .whereType<Map<String, dynamic>>()
-              .where((v) => v['id'] != null)
-              .toList();
-
-          sortedList.sort((a, b) {
-            final at = (a['releaseTime'] ?? 0) as int;
-            final bt = (b['releaseTime'] ?? 0) as int;
-            return bt.compareTo(at); // newest first
-          });
-
-          for (final v in sortedList) {
-            final id = v['id'] as String;
-            final clientUrl = (v['client']?['url'] ?? '') as String;
-            final serverUrl = (v['server']?['url'] ?? '') as String;
-            versionList.add({
-              id: clientUrl.isNotEmpty ? clientUrl : serverUrl,
-            });
-          }
-        } else if (versionsRaw is Map<String, dynamic>) {
-          // Puzzle loader-style format: map of version IDs to dependency info
-          final entries = versionsRaw.entries.toList();
-
-          entries.sort((a, b) {
-            final at = (a.value['epoch'] ?? 0) as int;
-            final bt = (b.value['epoch'] ?? 0) as int;
-            return bt.compareTo(at); // newest first
-          });
-
-          for (final e in entries) {
-            final depUrl = e.value is Map && (e.value['dependencies'] is String)
-                ? e.value['dependencies'] as String
-                : '';
-            versionList.add({ e.key: depUrl });
-          }
-        }
-
-        if (versionList.isNotEmpty) {
-          versionList.insert(0, { 'latest': '' });
-        }
-
-        aggregated[loader]![modType] = versionList;
+        aggregated[loader]![modType] = _parseVersions(localData);
       }
     }
 
-    return aggregated;
+    // Call UI with cached data immediately
+    onUpdate(aggregated);
+
+    await Future(() async {
+      final updatedAggregated = <String, Map<String, List<Map<String, String>>>>{};
+
+      for (final loaderEntry in loaderRepos.entries) {
+        final loader = loaderEntry.key;
+        updatedAggregated[loader] = {};
+        for (final modTypeEntry in loaderEntry.value.entries) {
+          final modType = modTypeEntry.key;
+          final repo = modTypeEntry.value;
+          final cacheFile = File('$cacheDirPath/$loader-$modType.json');
+
+          Map<String, dynamic>? localData;
+          if (cacheFile.existsSync()) {
+            try {
+              localData = jsonDecode(cacheFile.readAsStringSync()) as Map<String, dynamic>;
+            } catch (_) {}
+          }
+
+          Map<String, dynamic>? remoteData;
+          try {
+            final url = 'https://raw.githubusercontent.com/$repo/versions.json';
+            final response = await http.get(Uri.parse(url));
+            if (response.statusCode == 200) remoteData = jsonDecode(response.body) as Map<String, dynamic>;
+          } catch (_) {}
+
+          // Only overwrite if remote is newer
+          final localLatest = _getLatestVersionId(localData);
+          final remoteLatest = _getLatestVersionId(remoteData);
+          if (remoteLatest != null && remoteLatest != localLatest) {
+            await cacheFile.parent.create(recursive: true);
+            await cacheFile.writeAsString(jsonEncode(remoteData));
+            localData = remoteData;
+          }
+
+          updatedAggregated[loader]![modType] = _parseVersions(localData);
+        }
+      }
+
+      // Call UI again with updated remote versions
+      onUpdate(updatedAggregated);
+    });
+
+    return aggregated; // return cached immediately
   }
+
+  static List<Map<String, String>> _parseVersions(Map<String, dynamic>? data) {
+    final versionList = <Map<String, String>>[];
+    final versionsRaw = data?['versions'];
+
+    if (versionsRaw is List && versionsRaw.isNotEmpty) {
+      final sortedList = versionsRaw
+          .whereType<Map<String, dynamic>>()
+          .where((v) => v['id'] != null)
+          .toList();
+
+      sortedList.sort((a, b) {
+        final at = (a['releaseTime'] ?? 0) as int;
+        final bt = (b['releaseTime'] ?? 0) as int;
+        return bt.compareTo(at); // newest first
+      });
+
+      for (final v in sortedList) {
+        final id = v['id'] as String;
+        final clientUrl = (v['client']?['url'] ?? '') as String;
+        final serverUrl = (v['server']?['url'] ?? '') as String;
+        versionList.add({id: clientUrl.isNotEmpty ? clientUrl : serverUrl});
+      }
+    } else if (versionsRaw is Map<String, dynamic> && versionsRaw.isNotEmpty) {
+      final entries = versionsRaw.entries.toList();
+
+      entries.sort((a, b) {
+        final at = (a.value['epoch'] ?? 0) as int;
+        final bt = (b.value['epoch'] ?? 0) as int;
+        return bt.compareTo(at); // newest first
+      });
+
+      for (final e in entries) {
+        final depUrl = e.value is Map && (e.value['dependencies'] is String)
+            ? e.value['dependencies'] as String
+            : '';
+        versionList.add({e.key: depUrl});
+      }
+    }
+
+    if (versionList.isNotEmpty) versionList.insert(0, {'latest': ''});
+    return versionList;
+  }
+
+  static String? _getLatestVersionId(Map<String, dynamic>? data) {
+    if (data == null) return null;
+    final versions = data['versions'];
+    if (versions is List && versions.isNotEmpty) {
+      versions.sort((a, b) {
+        final at = (a['releaseTime'] ?? 0) as int;
+        final bt = (b['releaseTime'] ?? 0) as int;
+        return bt.compareTo(at);
+      });
+      return versions.first['id'] as String?;
+    } else if (versions is Map<String, dynamic> && versions.isNotEmpty) {
+      final entries = versions.entries.toList();
+      entries.sort((a, b) {
+        final at = (a.value['epoch'] ?? 0) as int;
+        final bt = (b.value['epoch'] ?? 0) as int;
+        return bt.compareTo(at);
+      });
+      return entries.first.key;
+    }
+
+    return null;
+  }
+}
+
+String resolveLatest(Map<String, Map<String, List<Map<String, String>>>> aggregated, String loader, String modType, String version) {
+  if (version != "latest") return version;
+
+  final list = aggregated[loader]?[modType];
+  if (list == null || list.isEmpty) {
+    throw StateError("No versions available for $loader/$modType");
+  }
+
+  final first = list.first;
+  return first.keys.first;
 }

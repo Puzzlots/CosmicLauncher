@@ -1,10 +1,15 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:dropdown_search/dropdown_search.dart';
 import 'package:flutter/material.dart';
+import 'package:nanoid/nanoid.dart';
 import 'package:polaris/utils/cache_utils.dart';
+import 'package:polaris/utils/instance_utils.dart';
 import 'package:polaris/utils/java_utils.dart';
 import 'package:polaris/utils/persistent_widgets.dart';
+import 'package:polaris/utils/puzzle_downloader.dart';
+import 'package:polaris/utils/general_utils.dart';
 
 import 'utils/version_cache.dart';
 
@@ -47,22 +52,38 @@ class LauncherHome extends StatefulWidget {
 
 class _LauncherHomeState extends State<LauncherHome> {
   final GlobalKey<ScaffoldMessengerState> _scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
-
-  List<Map<String, String>> instances = [
-    {"name": "Modded Survival", "version": "alpha-0.3.2", "loader": "Puzzle"}, //TODO load and track
-    {"name": "Vanicream", "version": "alpha-0.2.9", "loader": "Vanilla"},
-  ];
+  final instanceManager = InstanceManager();
+  late List<Map<String, String>> instances = [];
 
   LauncherTab activeTab = LauncherTab.library; // track which tab is active
 
-  Future<void> _addInstance() async {
-    final details = await askForInstanceDetails(context);
+  Future<void> _loadInstances() async {
+    instances = await instanceManager.loadAllInstances();
+    setState(() {}); // trigger UI update
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _loadInstances();
+  }
+
+  Future<void> _addInstance({Map<String, String>? details}) async {
+    details ??= await askForInstanceDetails(context);
     if (details == null) return;
 
-    setState(() {
-      instances.add(details);
-    });
+    String id;
+    do {
+      final short = nanoid(5);
+      id = '${details['name']}-$short';
+    } while (await instanceManager.loadInstance(id) != null);
+
+    details['uuid'] = id;
+    await instanceManager.saveInstance(id, details);
+
+    await _loadInstances();
   }
+
 
   //Loaders
   final loaderRepos = {
@@ -75,17 +96,6 @@ class _LauncherHomeState extends State<LauncherHome> {
     }
   };
 
-  Future<Map<String, Map<String, List<Map<String, String>>>>> fetchVersions() async {
-    final aggregated = await VersionCache.fetchAllLoaders(
-      loaderRepos: loaderRepos,
-      cacheDirPath: "${getPersistentCacheDir().path}/caches/versions",
-      forceRefresh: false,
-    );
-
-    // Return in the exact format your UI expects
-    return aggregated;
-  }
-
   Future<Map<String, String>?> askForInstanceDetails(BuildContext context) async {
     final TextEditingController nameController = TextEditingController();
     String selectedVersion = "latest";
@@ -93,7 +103,6 @@ class _LauncherHomeState extends State<LauncherHome> {
     final loaders = loaderRepos.keys.toList();
     String selectedLoader = loaders.first;
 
-    Future<Map<String, Map<String, List<Map<String, String>>>>> versionsFuture = fetchVersions();
     final Map<String, String> selectedSubVersions = {};
 
     // Shared dimensions for both pages
@@ -129,84 +138,87 @@ class _LauncherHomeState extends State<LauncherHome> {
       barrierDismissible: false,
       builder: (ctx) {
         bool onSubVersionPage = false;
+        Map<String, Map<String, List<Map<String, String>>>> currentVersions = {};
+        bool hasFetchedVersions = false; // track if fetch already started
 
         return StatefulBuilder(
           builder: (context, setState) {
+            // start async fetch only once after first build
+            if (!hasFetchedVersions) {
+              hasFetchedVersions = true;
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                VersionCache.fetchVersions(
+                  loaderRepos: loaderRepos,
+                  cacheDirPath: "${getPersistentCacheDir().path}/caches/versions",
+                  onUpdate: (versions) {
+                    if (context.mounted) {
+                      setState(() {
+                        currentVersions = versions;
+                      });
+                    }
+                  },
+                );
+              });
+            }
+
             void goToSubVersionPage() => setState(() => onSubVersionPage = true);
             void goBack() => setState(() => onSubVersionPage = false);
 
             return AlertDialog(
               title: Text(onSubVersionPage ? "$selectedLoader Versions" : "New Instance"),
               content: ConstrainedBox(
-                constraints: const BoxConstraints(
-                  maxWidth: dialogWidth,
-                  maxHeight: dialogMaxHeight,
-                ),
+                constraints: const BoxConstraints(maxWidth: dialogWidth, maxHeight: dialogMaxHeight),
                 child: SingleChildScrollView(
-                  child: FutureBuilder<Map<String, Map<String, List<Map<String, String>>>>>(
-                    future: versionsFuture,
-                    builder: (context, snapshot) {
-                      if (snapshot.connectionState == ConnectionState.waiting) {
-                        return const CircularProgressIndicator();
-                      }
-                      if (snapshot.hasError) {
-                        return Text('Error: ${snapshot.error}', style: const TextStyle(color: Colors.red));
-                      }
-                      if (!snapshot.hasData) {
-                        return const Text('No data found.');
-                      }
-                      final data = snapshot.data!;
-
-                      return Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: onSubVersionPage
-                            ? [
-                          for (final modType in data[selectedLoader]?.keys ?? [])
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 12),
-                              child: buildDropdown(
-                                label: "$modType Version",
-                                items: (data[selectedLoader]?[modType] ?? [])
-                                    .map((versionMap) => versionMap.keys.first)
-                                    .toList(),
-                                selected: selectedSubVersions[modType] ??
-                                    (((data[selectedLoader]?[modType] ?? []).isNotEmpty)
-                                        ? (data[selectedLoader]![modType]!.first.keys.first)
-                                        : ""),
-                                onChanged: (v) => setState(() => selectedSubVersions[modType as String] = v),
-                              ),
-                            ),
-                        ]
-                            : [
-                          TextField(
-                            controller: nameController,
-                            decoration: const InputDecoration(labelText: "Instance Name"),
-                            autofocus: true,
-                            maxLength: 40,
-                          ),
-                          const SizedBox(height: 12),
-                          buildDropdown(
-                            label: "Game Version",
-                            items: (data['Vanilla']?['Client'] as List<dynamic>?)
-                                ?.map((v) => v.keys.first as String)
-                                .toList() ?? [],
-                            selected: selectedVersion,
-                            onChanged: (v) => setState(() => selectedVersion = v),
-                          ),
-                          const SizedBox(height: 12),
-                          DropdownButtonFormField<String>(
-                            initialValue: selectedLoader,
-                            items: loaders
-                                .map((v) => DropdownMenuItem(value: v, child: Text(v)))
+                  child: currentVersions.isEmpty
+                      ? const Center(child: CircularProgressIndicator())
+                      : Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: onSubVersionPage
+                        ? [
+                      for (final modType in currentVersions[selectedLoader]?.keys ?? [])
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: buildDropdown(
+                            label: "$modType Version",
+                            items: (currentVersions[selectedLoader]?[modType] ?? [])
+                                .map((v) => v.keys.first)
                                 .toList(),
-                            onChanged: (value) {
-                              if (value != null) setState(() => selectedLoader = value);
-                            },
-                            decoration: const InputDecoration(labelText: "Loader"),
+                            selected: selectedSubVersions[modType] ??
+                                ((currentVersions[selectedLoader]?[modType]?.isNotEmpty ?? false)
+                                    ? currentVersions[selectedLoader]![modType]!.first.keys.first
+                                    : ""),
+                            onChanged: (v) => setState(() => selectedSubVersions[modType as String] = v),
                           ),
-                        ],
-                      );
-                    },
+                        ),
+                    ]
+                        : [
+                      TextField(
+                        controller: nameController,
+                        decoration: const InputDecoration(labelText: "Instance Name"),
+                        autofocus: true,
+                        maxLength: 40,
+                      ),
+                      const SizedBox(height: 12),
+                      buildDropdown(
+                        label: "Game Version",
+                        items: (currentVersions['Vanilla']?['Client'] ?? [])
+                            .map((v) => v.keys.first)
+                            .toList(),
+                        selected: selectedVersion,
+                        onChanged: (v) => setState(() => selectedVersion = v),
+                      ),
+                      const SizedBox(height: 12),
+                      DropdownButtonFormField<String>(
+                        initialValue: selectedLoader,
+                        items: loaders
+                            .map((v) => DropdownMenuItem(value: v, child: Text(v)))
+                            .toList(),
+                        onChanged: (value) {
+                          if (value != null) setState(() => selectedLoader = value);
+                        },
+                        decoration: const InputDecoration(labelText: "Loader"),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -216,25 +228,34 @@ class _LauncherHomeState extends State<LauncherHome> {
                 else
                   TextButton(onPressed: () => Navigator.pop(ctx, null), child: const Text("Cancel")),
                 ElevatedButton(
-                  onPressed: () {
+                  onPressed: () async {
                     if (!onSubVersionPage && selectedLoader != "Vanilla") {
                       goToSubVersionPage();
                       return;
                     }
 
                     String versionInfo = selectedVersion;
-                    if (selectedSubVersions.isNotEmpty) {
-                      final mods = selectedSubVersions.entries
-                          .map((e) => "${e.key}:${e.value}")
-                          .join(", ");
-                      versionInfo = "$versionInfo | $mods";
-                    }
-
-                    Navigator.pop(ctx, {
+                    var loaderInfo = {
                       "name": nameController.text.trim(),
                       "version": versionInfo,
                       "loader": selectedLoader,
-                    });
+                    };
+
+                    if (selectedSubVersions.isNotEmpty) {
+                      loaderInfo.addEntries(selectedSubVersions.entries);
+                    }
+
+                    Navigator.pop(ctx, loaderInfo);
+                    if (selectedLoader == "puzzle") {
+                      try {
+                        await downloadPuzzleVersion(loaderInfo['Core']!, loaderInfo['Cosmic']!, currentVersions);
+                      } catch (e) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text("Failed to download Puzzle: $e")),
+                        );
+                        return;
+                      }
+                    }
                   },
                   child: Text(onSubVersionPage ? "Create" : (selectedLoader == "Vanilla" ? "Create" : "Next")),
                 ),
@@ -242,16 +263,42 @@ class _LauncherHomeState extends State<LauncherHome> {
             );
           },
         );
-
       },
     );
   }
 
 
-  void _launchInstance(Map<String, String> instance) {
+  Future<void> _launchInstance(Map<String, String> instance) async {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text("Launching ${instance['name']}...")), //TODO
+      SnackBar(content: Text("Launching ${instance['name']}...")),
     );
+
+    final loader = instance['loader'];
+
+    if (loader != null && loader.toLowerCase() == 'puzzle') {
+    // build classpath for java launch
+    // final libDir = Directory('puzzle_runtime');
+    // final sep = Platform.isWindows ? ';' : ':';
+    // final jars = libDir
+    //     .listSync()
+    //     .whereType<File>()
+    //     .where((f) => f.path.endsWith('.jar'))
+    //     .map((f) => f.path)
+    //     .join(sep);
+
+    // try {
+    //   final process = await Process.start(
+    //     'java',
+    //     ['-cp', jars, 'dev.puzzleshq.puzzleloader.loader.launch.pieces.ClientPiece'],
+    //     mode: ProcessStartMode.inheritStdio,
+    //   );
+    //   await process.exitCode;
+    // } catch (e) {
+    //   ScaffoldMessenger.of(context).showSnackBar(
+    //     SnackBar(content: Text("Failed to launch instance: $e")),
+    //   );
+    // }
+    }
   }
 
 
@@ -315,9 +362,10 @@ class _LauncherHomeState extends State<LauncherHome> {
                         icon: Icons.copy,
                         label: "Duplicate Instance",
                         onTap: () {
+                          _addInstance(details: instance);
                           overlayEntry?.remove();
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text("Duplicated instance")), //TODO
+                            const SnackBar(content: Text("Duplicated instance")),
                           );
                         },
                       ),
@@ -325,13 +373,17 @@ class _LauncherHomeState extends State<LauncherHome> {
                         context,
                         icon: Icons.folder_open,
                         label: "Open Folder",
-                        onTap: () => overlayEntry?.remove(), //TODO
+                        onTap: () {
+                          revealFile(instanceManager.getInstanceFilePath(instance['uuid']!));
+                          overlayEntry?.remove();
+                          },
                       ),
                       _contextItem(
                         context,
                         icon: Icons.content_copy,
                         label: "Copy Path",
-                        onTap: () { //TODO
+                        onTap: () {
+                          copyToClipboard(instanceManager.getInstanceFilePath(instance['uuid']!));
                           overlayEntry?.remove();
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(content: Text("Path copied to clipboard")),
@@ -497,7 +549,12 @@ class _LauncherHomeState extends State<LauncherHome> {
             ),
             onPressed: () {
               setState(() {
-                instances.remove(instance); //TODO remove from json
+                instances.remove(instance);@override
+                void initState() {
+                  super.initState();
+                  _loadInstances();
+                }
+                instanceManager.deleteInstance(instance['uuid']!);
               });
               Navigator.pop(ctx);
 
@@ -527,19 +584,19 @@ class _LauncherHomeState extends State<LauncherHome> {
         int activeTab = 0;
         // Controllers & values
         final TextEditingController appDirController = TextEditingController(text: getPersistentCacheDir().path);
-        final TextEditingController  maxDownloadsController = TextEditingController(text: prefs.getDouble('max_concurrent_downloads', defaultValue: 3).toString());
+        final TextEditingController  maxDownloadsController = TextEditingController(text: prefs.getValue('max_concurrent_downloads', defaultValue: 3).toString());
         double? maxDownloads = double.tryParse(maxDownloadsController.text);
 
-        final TextEditingController maxWritesController = TextEditingController(text: prefs.getDouble('max_concurrent_writes', defaultValue: 10).toString());
+        final TextEditingController maxWritesController = TextEditingController(text: prefs.getValue('max_concurrent_writes', defaultValue: 10).toString());
         double? maxWrites = double.tryParse(maxWritesController.text);
 
-        final TextEditingController minMemoryController = TextEditingController(text: prefs.getDouble('defaults_instance_memory_min', defaultValue: 1024).toString());
+        final TextEditingController minMemoryController = TextEditingController(text: prefs.getValue('defaults_instance_memory_min', defaultValue: 1024).toString());
         double? minMemory = double.tryParse(minMemoryController.text);
         
-        final TextEditingController maxMemoryController = TextEditingController(text: prefs.getDouble('defaults_instance_memory_max', defaultValue: 4096).toString());
+        final TextEditingController maxMemoryController = TextEditingController(text: prefs.getValue('defaults_instance_memory_max', defaultValue: 4096).toString());
         double? maxMemory = double.tryParse(maxMemoryController.text);
         
-        bool fullscreen = prefs.getBool("defaults_instance_fullscreen", defaultValue: false);
+        bool fullscreen = prefs.getValue("defaults_instance_fullscreen", defaultValue: false);
 
         OutlineInputBorder darkGreyBorder = const OutlineInputBorder(
           borderSide: BorderSide(color: Colors.grey, width: 1),
@@ -767,7 +824,7 @@ class _LauncherHomeState extends State<LauncherHome> {
                                                         Row(
                                                           children: [
                                                             ElevatedButton.icon(
-                                                              onPressed: () => _browseFolder(java['path']),
+                                                              onPressed: () => browseFolder(java['path']),
                                                               icon: const Icon(Icons.folder_open),
                                                               label: const Text("Browse"),
                                                             ),
@@ -883,7 +940,7 @@ class _LauncherHomeState extends State<LauncherHome> {
                                                 ),
                                               ),
                                               IconButton(icon: const Icon(Icons.folder_open), onPressed: () {
-                                                _browseFolder(appDirController.text);
+                                                browseFolder(appDirController.text);
                                                 }),
                                             ],
                                           ),
@@ -1265,23 +1322,5 @@ class _LauncherHomeState extends State<LauncherHome> {
         ],
       ),
     );
-  }
-
-  Future<void> _browseFolder(String? path) async {
-    final dir = Directory(path!);
-    if (!await dir.exists()) {
-      throw Exception('Directory does not exist: $path');
-    }
-
-    if (Platform.isWindows) {
-      await Process.start('explorer', [dir.path]);
-    } else if (Platform.isMacOS) {
-      await Process.start('open', [dir.path]);
-    } else if (Platform.isLinux) {
-      await Process.start('xdg-open', [dir.path]);
-    } else {
-      throw UnsupportedError('Unsupported platform: ${Platform.operatingSystem}');
-    }
-    return;
   }
 }

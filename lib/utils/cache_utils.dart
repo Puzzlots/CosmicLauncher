@@ -53,108 +53,59 @@ Future<void> deleteCaches({String appName = title}) async {
 }
 
 class PersistentPrefs {
-  static PersistentPrefs? _instance;
-  late File _file;
+  final File _file;
   Map<String, dynamic> _cache = {};
-
-  // Timer for debouncing writes
   Timer? _debounce;
 
-  PersistentPrefs._();
+  PersistentPrefs._(this._file, this._cache);
 
-  /// Open or create the prefs file
-  static Future<PersistentPrefs> open({String appName = title}) async {
-    if (_instance != null) return _instance!;
-
+  static Future<PersistentPrefs> open({String appName = title, String fileName = 'prefs.json'}) async {
     final dir = getPersistentCacheDir(appName: appName);
-    final file = File(p.join("${dir.path}/caches/", 'prefs.json'));
+    final file = File(p.join(dir.path, 'caches', fileName));
     if (!await file.exists()) await file.create(recursive: true);
 
     final content = await file.readAsString().catchError((_) => '{}');
     final data = jsonDecode(content.isEmpty ? '{}' : content) as Map<String, dynamic>;
-
-    final instance = PersistentPrefs._();
-    instance._file = file;
-    instance._cache = data;
-    _instance = instance;
-    return instance;
+    return PersistentPrefs._(file, data);
   }
 
-  /// --- Internal flush with optional debounce ---
   void _flush({bool debounce = true}) {
-    // Cancel previous debounce if any
     _debounce?.cancel();
-
     if (debounce) {
-      // Schedule a write after a short delay
       _debounce = Timer(const Duration(milliseconds: 200), () async {
         final content = await _file.readAsString().catchError((_) => '{}');
-        final data = jsonDecode(content.isEmpty ? '{}' : content) as Map<String, dynamic>;
-        final merged = {...data, ..._cache};
+        final existing = jsonDecode(content.isEmpty ? '{}' : content) as Map<String, dynamic>;
+        final merged = {...existing, ..._cache};
         await _file.writeAsString(jsonEncode(merged));
       });
     } else {
-      // Immediate write
       () async {
         final content = await _file.readAsString().catchError((_) => '{}');
-        final data = jsonDecode(content.isEmpty ? '{}' : content) as Map<String, dynamic>;
-        final merged = {...data, ..._cache};
+        final existing = jsonDecode(content.isEmpty ? '{}' : content) as Map<String, dynamic>;
+        final merged = {...existing, ..._cache};
         await _file.writeAsString(jsonEncode(merged));
       }();
     }
   }
 
-  /// --- Setters ---
-  Future<void> setString(String key, String value) async {
+
+  // setters
+  Future<void> setValue(String key, dynamic value) async {
     _cache[key] = value;
     _flush();
   }
 
-  Future<void> setInt(String key, int value) async {
-    _cache[key] = value;
-    _flush();
-  }
-
-  Future<void> setBool(String key, bool value) async {
-    _cache[key] = value;
-    _flush();
-  }
-
-  Future<void> setDouble(String key, double value) async {
-    _cache[key] = value;
-    _flush();
-  }
-
-  /// --- Getters ---
-  String getString(String key, {String defaultValue = ''}) {
+  // getters
+  T getValue<T>(String key, {T? defaultValue}) {
     final v = _cache[key];
-    return v is String ? v : defaultValue;
+    return v is T ? v : defaultValue as T;
   }
 
-  int getInt(String key, {int defaultValue = 0}) {
-    final v = _cache[key];
-    return v is int ? v : defaultValue;
-  }
-
-  bool getBool(String key, {bool defaultValue = false}) {
-    final v = _cache[key];
-    return v is bool ? v : defaultValue;
-  }
-
-  double getDouble(String key, {double defaultValue = 0.0}) {
-    final v = _cache[key];
-    return v is double
-        ? v
-        : (v is int ? v.toDouble() : defaultValue);
-  }
-
-  /// --- Remove key ---
   Future<void> remove(String key) async {
     _cache.remove(key);
     _flush();
   }
 
-  /// --- Clear all ---
   Future<void> clear() async {
     _cache.clear();
     _flush();
