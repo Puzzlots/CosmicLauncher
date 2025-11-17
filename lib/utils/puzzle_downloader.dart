@@ -17,14 +17,14 @@ Future<void> downloadPuzzleVersion(
   final cosmicClientJar = "puzzle-loader-cosmic-$cosmicVersion-client.jar";
   final cosmicCommonJar = "puzzle-loader-cosmic-$cosmicVersion-common.jar";
 
-  String jitpackUrl(String artifact) =>
-      "https://jitpack.io/com/github/PuzzlesHQ/$artifact/$artifact";
+  String loaderUrl(String module, String version, String environment) =>
+      "https://repo1.maven.org/maven2/dev/puzzleshq/puzzle-loader-$module/$version/puzzle-loader-$module-$version-$environment.jar";
 
   final urls = [
-    [coreClientJar, jitpackUrl("puzzle-loader-core/$coreClientJar")],
-    [coreCommonJar, jitpackUrl("puzzle-loader-core/$coreCommonJar")],
-    [cosmicClientJar, jitpackUrl("puzzle-loader-cosmic/$cosmicClientJar")],
-    [cosmicCommonJar, jitpackUrl("puzzle-loader-cosmic/$cosmicCommonJar")],
+    [coreClientJar, loaderUrl("core", coreVersion, "client")],
+    [coreCommonJar, loaderUrl("core", coreVersion, "common")],
+    [cosmicClientJar, loaderUrl("cosmic", cosmicVersion, "client")],
+    [cosmicCommonJar, loaderUrl("cosmic", cosmicVersion, "common")],
   ];
 
   await downloadJars(urls, libDir);
@@ -87,7 +87,10 @@ Future<void> downloadJars(List<List<String>> files, Directory libDir) async {
     final url = pair[1];
     final file = File("${libDir.path}/$fileName");
     if (await file.exists()) continue;
-    await tryDownload(url, file);
+    if (kDebugMode) {
+      print("Downloading $url");
+
+    }await tryDownload(url, file);
   }
 }
 
@@ -98,7 +101,11 @@ Future<bool> tryDownload(String url, File target) async {
       await target.writeAsBytes(resp.bodyBytes);
       return true;
     }
-  } catch (_) {}
+  } catch (e) {
+    if (kDebugMode) {
+      print("[Exception] download error: $e");
+    }
+  }
   return false;
 }
 
