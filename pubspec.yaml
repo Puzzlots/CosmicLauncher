@@ -25,6 +25,7 @@ dependencies:
   http: ^1.6.0
   path: ^1.9.1
   nanoid: ^1.0.0
+  archive: ^4.0.7
 
 dev_dependencies:
   analysis_defaults:

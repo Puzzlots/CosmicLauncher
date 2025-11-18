@@ -2,8 +2,10 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:dropdown_search/dropdown_search.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:nanoid/nanoid.dart';
+import 'package:path/path.dart' as p;
 import 'package:polaris/utils/cache_utils.dart';
 import 'package:polaris/utils/cosmic_downloader.dart';
 import 'package:polaris/utils/general_utils.dart';
@@ -11,6 +13,7 @@ import 'package:polaris/utils/instance_utils.dart';
 import 'package:polaris/utils/java_utils.dart';
 import 'package:polaris/utils/persistent_widgets.dart';
 import 'package:polaris/utils/puzzle_downloader.dart';
+import 'package:polaris/utils/temurin_downloader.dart';
 
 import 'utils/version_cache.dart';
 
@@ -342,7 +345,7 @@ class _LauncherHomeState extends State<LauncherHome> {
       // track count
       runningInstances.value++;
 
-      process.exitCode.then((_) {
+      await process.exitCode.then((_) {
         runningInstances.value--;
       });
 
@@ -674,6 +677,19 @@ class _LauncherHomeState extends State<LauncherHome> {
         
         bool fullscreen = prefs.getValue("defaults_instance_fullscreen", defaultValue: false);
 
+        final TextEditingController javaVersionController = TextEditingController(text: '17');
+        final TextEditingController downloadDirController = TextEditingController();
+
+        if (Platform.isWindows) {
+          downloadDirController.text = r'C:\Program Files\java';
+        } else if (Platform.isMacOS) {
+          downloadDirController.text = p.join(Platform.environment['HOME'] ?? '/', 'Library', 'Java');
+        } else if (Platform.isLinux) {
+          downloadDirController.text = p.join(Platform.environment['HOME'] ?? '/', '.local', 'share', 'java');
+        } else {
+          downloadDirController.text = Directory.current.path;
+        }
+
         OutlineInputBorder darkGreyBorder = const OutlineInputBorder(
           borderSide: BorderSide(color: Colors.grey, width: 1),
         );
@@ -861,29 +877,120 @@ class _LauncherHomeState extends State<LauncherHome> {
                               child: Builder(builder: (_) {
                                 switch (activeTab) {
                                   case 0: // Java Installations
-                                    return FutureBuilder<List<Map<String, String>>>(
-                                      future: detectJavaInstallations(),
-                                      builder: (context, snapshot) {
-                                        if (snapshot.connectionState == ConnectionState.waiting) {
-                                          return const Center(child: CircularProgressIndicator());
-                                        }
-                                        if (snapshot.hasError) {
-                                          return Center(child: Text('Error: ${snapshot.error}'));
-                                        }
-                                        final javaInstallations = snapshot.data ?? [];
-                                        if (javaInstallations.isEmpty) {
-                                          return const Center(child: Text('No Java installations found.'));
-                                        }
-                                        return Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            Expanded(
-                                              child: ListView.builder(
+                                    return Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        // Downloader UI
+                                        Padding(
+                                          padding: const EdgeInsets.all(8.0),
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Row(
+                                                children: [
+                                                  const Text(
+                                                    'Java Version: ',
+                                                    style: TextStyle(color: Colors.white, fontSize: 16),
+                                                  ),
+                                                  const SizedBox(width: 8),
+                                                  SizedBox(
+                                                    width: 60,
+                                                    child: TextField(
+                                                      controller: javaVersionController,
+                                                      keyboardType: TextInputType.number,
+                                                      decoration: const InputDecoration(
+                                                        border: OutlineInputBorder(),
+                                                        isDense: true,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  const SizedBox(width: 8),
+                                                  ElevatedButton.icon(
+                                                    onPressed: () async {
+                                                      final versionText = javaVersionController.text;
+                                                      final version = int.tryParse(versionText);
+                                                      if (version == null) {
+                                                        if (!mounted) return;
+                                                        ScaffoldMessenger.of(context).showSnackBar(
+                                                          const SnackBar(content: Text('Please enter a valid Java version number')),
+                                                        );
+                                                        return;
+                                                      }
+
+                                                      final outDir = downloadDirController.text;
+                                                      final file = await TemurinDownloader.downloadLatest(
+                                                        version: version,
+                                                        outDir: outDir,
+                                                      );
+
+                                                      if (file != null && mounted) {
+                                                        if (kDebugMode) {print('[Info] Downloaded Java $version to ${file.path}');}
+                                                        ScaffoldMessenger.of(context).showSnackBar(
+                                                          SnackBar(content: Text('Downloaded Java $version to ${file.path}')),
+                                                        );
+                                                      }
+                                                    },
+                                                    icon: const Icon(Icons.download),
+                                                    label: const Text('Download'),
+                                                  ),
+                                                ],
+                                              ),
+                                              const SizedBox(height: 8),
+                                              Row(
+                                                children: [
+                                                  const Text(
+                                                    'Download Directory: ',
+                                                    style: TextStyle(color: Colors.white),
+                                                  ),
+                                                  const SizedBox(width: 8),
+                                                  Expanded(
+                                                    child: TextField(
+                                                      controller: downloadDirController,
+                                                      decoration: const InputDecoration(
+                                                        border: OutlineInputBorder(),
+                                                        isDense: true,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  IconButton(
+                                                    icon: const Icon(Icons.folder_open),
+                                                    onPressed: () async {
+                                                      final folder = downloadDirController.text;
+                                                      await browseFolder(folder);
+                                                      if (mounted) {
+                                                        setState(() {
+                                                          downloadDirController.text = folder;
+                                                        });
+                                                      }
+                                                    },
+                                                  ),
+                                                ],
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        const Divider(color: Colors.grey),
+                                        // Existing Java installations list
+                                        Expanded(
+                                          child: FutureBuilder<List<Map<String, String>>>(
+                                            future: detectJavaInstallations(),
+                                            builder: (context, snapshot) {
+                                              if (snapshot.connectionState == ConnectionState.waiting) {
+                                                return const Center(child: CircularProgressIndicator());
+                                              }
+                                              if (snapshot.hasError) {
+                                                return Center(child: Text('Error: ${snapshot.error}'));
+                                              }
+                                              final javaInstallations = snapshot.data ?? [];
+                                              if (javaInstallations.isEmpty) {
+                                                return const Center(child: Text('No Java installations found.'));
+                                              }
+                                              return ListView.builder(
                                                 itemCount: javaInstallations.length,
                                                 itemBuilder: (context, index) {
                                                   final java = javaInstallations[index];
                                                   return Padding(
-                                                    padding: const EdgeInsets.symmetric(vertical: 8),
+                                                    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
                                                     child: Column(
                                                       crossAxisAlignment: CrossAxisAlignment.start,
                                                       children: [
@@ -896,7 +1003,6 @@ class _LauncherHomeState extends State<LauncherHome> {
                                                             border: OutlineInputBorder(),
                                                           ),
                                                         ),
-
                                                         const SizedBox(height: 4),
                                                         Row(
                                                           children: [
@@ -906,19 +1012,20 @@ class _LauncherHomeState extends State<LauncherHome> {
                                                               label: const Text("Browse"),
                                                             ),
                                                             const SizedBox(width: 4),
-                                                            JavaTesterButton(java: java)
+                                                            JavaTesterButton(java: java),
                                                           ],
                                                         ),
                                                       ],
                                                     ),
                                                   );
                                                 },
-                                              ),
-                                            ),
-                                          ],
-                                        );
-                                      },
+                                              );
+                                            },
+                                          ),
+                                        ),
+                                      ],
                                     );
+
                                   case 1:
                                   // Default Instance Options
                                     return SingleChildScrollView(
@@ -1027,6 +1134,11 @@ class _LauncherHomeState extends State<LauncherHome> {
                                               ElevatedButton(onPressed: () {
                                                 deleteCaches();
                                               }, child: const Text("Purge Cache")),
+                                              ElevatedButton(onPressed: () async {
+                                                await deleteCaches(folder: 'instances');
+                                                await Future<dynamic>.delayed(const Duration(milliseconds: 50)); // release handles
+                                                await _loadInstances();
+                                              }, child: const Text("Purge Instances")),
                                             ],
                                           ),
                                           const SizedBox(height: 16),

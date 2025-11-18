@@ -32,9 +32,9 @@ Directory getPersistentCacheDir({String appName = title}) {
   return dir;
 }
 
-Future<void> deleteCaches({String appName = title}) async {
+Future<void> deleteCaches({String folder = 'caches', String appName = title}) async {
   final baseDir = getPersistentCacheDir(appName: appName);
-  final cacheDir = Directory(p.join(baseDir.path, 'caches'));
+  final cacheDir = Directory(p.join(baseDir.path, folder));
 
   if (await cacheDir.exists()) {
     try {
