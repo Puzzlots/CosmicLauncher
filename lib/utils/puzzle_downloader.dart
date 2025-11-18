@@ -6,8 +6,7 @@ import 'package:polaris/utils/cache_utils.dart';
 
 Future<void> downloadPuzzleVersion(
     String coreVersion,
-    String cosmicVersion,
-    Map<String, Map<String, List<Map<String, String>>>> aggregated,
+    String cosmicVersion
     ) async {
   final libDir = Directory("${getPersistentCacheDir().path}/puzzle_runtime");
   await libDir.create(recursive: true);

@@ -1,9 +1,11 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:dropdown_search/dropdown_search.dart';
 import 'package:flutter/material.dart';
 import 'package:nanoid/nanoid.dart';
 import 'package:polaris/utils/cache_utils.dart';
+import 'package:polaris/utils/cosmic_downloader.dart';
 import 'package:polaris/utils/general_utils.dart';
 import 'package:polaris/utils/instance_utils.dart';
 import 'package:polaris/utils/java_utils.dart';
@@ -242,6 +244,14 @@ class _LauncherHomeState extends State<LauncherHome> {
                       "loader": selectedLoader,
                     };
 
+                    loaderInfo['version'] = resolveLatest(currentVersions, "Vanilla", "Client", loaderInfo['version']);
+                    unawaited(downloadCosmicReachVersion(loaderInfo['version']!
+                    ).catchError((dynamic e) {
+                      messenger.showSnackBar(
+                        SnackBar(content: Text("Failed to download Cosmic Reach ${loaderInfo['version']}: $e")),
+                      );
+                    }));
+
                     if (selectedLoader == "Puzzle") {
                       loaderInfo.addEntries(selectedSubVersions.entries);
                       loaderInfo.addAll({"versions": "$versionInfo | ${selectedSubVersions.entries.map((e) => "${e.key}:${e.value}").join(", ")}"});
@@ -249,13 +259,10 @@ class _LauncherHomeState extends State<LauncherHome> {
                       loaderInfo['Core'] = resolveLatest(currentVersions, "Puzzle", "Core", loaderInfo['Core']);
                       loaderInfo['Cosmic'] = resolveLatest(currentVersions, "Puzzle", "Cosmic", loaderInfo['Cosmic']);
 
-                      unawaited(downloadPuzzleVersion(
-                        loaderInfo['Core']!,
-                        loaderInfo['Cosmic']!,
-                        currentVersions,
+                      unawaited(downloadPuzzleVersion(loaderInfo['Core']!, loaderInfo['Cosmic']!
                       ).catchError((dynamic e) {
                         messenger.showSnackBar(
-                          SnackBar(content: Text("Failed to download Puzzle: $e")),
+                          SnackBar(content: Text("Failed to download Puzzle ${loaderInfo['Core']}, ${loaderInfo['Cosmic']}: $e")),
                         );
                       }));
 
@@ -272,37 +279,78 @@ class _LauncherHomeState extends State<LauncherHome> {
     );
   }
 
+  final runningInstances = ValueNotifier<int>(0);
 
   Future<void> _launchInstance(Map<String, String> instance) async {
+    if (!mounted) return;
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text("Launching ${instance['name']}...")),
     );
 
+    final prefs = await PersistentPrefs.open();
+    if (!mounted) return;
+
     final loader = instance['loader'];
+    if (loader == null) return;
 
-    if (loader != null && loader.toLowerCase() == 'puzzle') {
-    // build classpath for java launch
-    // final libDir = Directory('puzzle_runtime');
-    // final sep = Platform.isWindows ? ';' : ':';
-    // final jars = libDir
-    //     .listSync()
-    //     .whereType<File>()
-    //     .where((f) => f.path.endsWith('.jar'))
-    //     .map((f) => f.path)
-    //     .join(sep);
+    // memory flags
+    final minMem = toInt(prefs.getValue<dynamic>('defaults_instance_memory_min'), 1024);
+    final maxMem = toInt(prefs.getValue<dynamic>('defaults_instance_memory_max'), 4096);
 
-    // try {
-    //   final process = await Process.start(
-    //     'java',
-    //     ['-cp', jars, 'dev.puzzleshq.puzzleloader.loader.launch.pieces.ClientPiece'],
-    //     mode: ProcessStartMode.inheritStdio,
-    //   );
-    //   await process.exitCode;
-    // } catch (e) {
-    //   ScaffoldMessenger.of(context).showSnackBar(
-    //     SnackBar(content: Text("Failed to launch instance: $e")),
-    //   );
-    // }
+    List<String> args;
+
+    if (loader == 'Puzzle') {
+      final libDir = Directory("${getPersistentCacheDir().path}/puzzle_runtime");
+      final sep = Platform.isWindows ? ';' : ':';
+      final jars = libDir
+          .listSync()
+          .whereType<File>()
+          .where((f) => f.path.endsWith('.jar'))
+          .map((f) => f.path)
+          .join(sep);
+
+      var modFolderDir = Directory("${getPersistentCacheDir().path}/instances/${instance['uuid']}/");
+      await modFolderDir.create(recursive: true);
+
+    args = [
+      '-Xms${minMem}m',
+      '-Xmx${maxMem}m',
+      '-cp', jars,
+      'dev.puzzleshq.puzzleloader.loader.launch.pieces.ClientPiece',
+      '--mod-folder="${modFolderDir.path}"'
+    ];
+
+    } else if (loader == "Vanilla") {
+      args = [
+        '-Xms${minMem}m',
+        '-Xmx${maxMem}m',
+        '-jar',
+        "${getPersistentCacheDir().path}/cosmic_versions/cosmic-reach-client-${instance['version']}.jar",
+      ];
+    } else {
+      return;
+    }
+
+    try {
+      final process = await Process.start(
+        'java',
+        args,
+        mode: ProcessStartMode.inheritStdio,
+      );
+
+      // track count
+      runningInstances.value++;
+
+      process.exitCode.then((_) {
+        runningInstances.value--;
+      });
+
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Failed to launch instance: $e")),
+      );
     }
   }
 
@@ -914,7 +962,7 @@ class _LauncherHomeState extends State<LauncherHome> {
                                             max: 16384,
                                             onChanged: (v) => setState(() {
                                               minMemory = v;
-                                              minMemoryController.text = v.toInt().toString(); //TODO
+                                              minMemoryController.text = v.toInt().toString();
                                             }),
                                             entryWidth: 100,
                                             keyName: 'defaults_instance_memory_min',
@@ -928,7 +976,7 @@ class _LauncherHomeState extends State<LauncherHome> {
                                             max: 16384,
                                             onChanged: (v) => setState(() {
                                               maxMemory = v;
-                                              maxMemoryController.text = v.toInt().toString(); //TODO
+                                              maxMemoryController.text = v.toInt().toString();
                                             }),
                                             entryWidth: 100,
                                             keyName: 'defaults_instance_memory_max',
@@ -1170,25 +1218,28 @@ class _LauncherHomeState extends State<LauncherHome> {
                         title,
                         style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                       ),
-                      Row(
-                        children: [
-                          Container(
-                            width: 12,
-                            height: 12,
-                            decoration: BoxDecoration(
-                              color: instances.isEmpty ? Colors.red : Colors.green,
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            instances.isEmpty
-                                ? "No instances running"
-                                : "${instances.length} instance(s) running",//TODO
-                            style: const TextStyle(fontSize: 14),
-                          ),
-                        ],
-                      ),
+                      ValueListenableBuilder<int>(
+                        valueListenable: runningInstances,
+                        builder: (context, value, child) {
+                          return Row(
+                            children: [
+                              Container(
+                                width: 12,
+                                height: 12,
+                                decoration: BoxDecoration(
+                                  color: value == 0 ? Colors.red : Colors.green,
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                value == 0 ? "No instances running" : "$value instance${value == 1 ? '' : 's'} running",
+                                style: const TextStyle(fontSize: 14),
+                              ),
+                            ],
+                          );
+                        },
+                      )
                     ],
                   ),
                 ),

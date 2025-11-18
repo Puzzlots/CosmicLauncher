@@ -111,3 +111,14 @@ class PersistentPrefs {
   }
 }
 
+int toInt(dynamic v, int fallback) {
+  if (v is int) return v;
+  if (v is double) return v.floor();
+  if (v is String) {
+    final n = num.tryParse(v);
+    if (n != null) return n.floor();
+  }
+  return fallback;
+}
+
+
