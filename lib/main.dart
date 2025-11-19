@@ -306,12 +306,14 @@ class _LauncherHomeState extends State<LauncherHome> {
     if (loader == 'Puzzle') {
       final libDir = Directory("${getPersistentCacheDir().path}/puzzle_runtime");
       final sep = Platform.isWindows ? ';' : ':';
-      final jars = libDir
+      var jars = libDir
           .listSync()
           .whereType<File>()
           .where((f) => f.path.endsWith('.jar'))
           .map((f) => f.path)
           .join(sep);
+      
+      jars += "$sep${getPersistentCacheDir().path}/cosmic_versions/cosmic-reach-client-${instance['version']}.jar";
 
       var modFolderDir = Directory("${getPersistentCacheDir().path}/instances/${instance['uuid']}/");
       await modFolderDir.create(recursive: true);
@@ -321,7 +323,7 @@ class _LauncherHomeState extends State<LauncherHome> {
       '-Xmx${maxMem}m',
       '-cp', jars,
       'dev.puzzleshq.puzzleloader.loader.launch.pieces.ClientPiece',
-      '--mod-folder="${modFolderDir.path}"'
+      '--mod-folder=${modFolderDir.path}'
     ];
 
     } else if (loader == "Vanilla") {
