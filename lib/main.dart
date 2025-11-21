@@ -5,15 +5,17 @@ import 'package:dropdown_search/dropdown_search.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:nanoid/nanoid.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path/path.dart' as p;
 import 'package:polaris/utils/cache_utils.dart';
-import 'package:polaris/utils/cosmic_downloader.dart';
+import 'package:polaris/utils/credentials.dart';
+import 'package:polaris/utils/downloaders/cosmic_downloader.dart';
+import 'package:polaris/utils/downloaders/puzzle_downloader.dart';
+import 'package:polaris/utils/downloaders/temurin_downloader.dart';
 import 'package:polaris/utils/general_utils.dart';
 import 'package:polaris/utils/instance_utils.dart';
 import 'package:polaris/utils/java_utils.dart';
 import 'package:polaris/utils/persistent_widgets.dart';
-import 'package:polaris/utils/puzzle_downloader.dart';
-import 'package:polaris/utils/temurin_downloader.dart';
 
 import 'utils/version_cache.dart';
 
@@ -59,6 +61,11 @@ class _LauncherHomeState extends State<LauncherHome> {
   final instanceManager = InstanceManager();
   late List<Map<String, String>> instances = [];
 
+  Future<String> _getLauncherVersion() async {
+    final info = await PackageInfo.fromPlatform();
+    return info.version;
+  }
+
   LauncherTab activeTab = LauncherTab.library; // track which tab is active
 
   Future<void> _loadInstances() async {
@@ -70,6 +77,7 @@ class _LauncherHomeState extends State<LauncherHome> {
   void initState() {
     super.initState();
     _loadInstances();
+    _load();
   }
 
   Future<void> _addInstance({Map<String, String>? details}) async {
@@ -297,7 +305,6 @@ class _LauncherHomeState extends State<LauncherHome> {
     final loader = instance['loader'];
     if (loader == null) return;
 
-    // memory flags
     final minMem = toInt(prefs.getValue<dynamic>('defaults_instance_memory_min'), 1024);
     final maxMem = toInt(prefs.getValue<dynamic>('defaults_instance_memory_max'), 4096);
 
@@ -312,19 +319,19 @@ class _LauncherHomeState extends State<LauncherHome> {
           .where((f) => f.path.endsWith('.jar'))
           .map((f) => f.path)
           .join(sep);
-      
+
       jars += "$sep${getPersistentCacheDir().path}/cosmic_versions/cosmic-reach-client-${instance['version']}.jar";
 
-      var modFolderDir = Directory("${getPersistentCacheDir().path}/instances/${instance['uuid']}/");
+      final modFolderDir = Directory("${getPersistentCacheDir().path}/instances/${instance['uuid']}/");
       await modFolderDir.create(recursive: true);
 
-    args = [
-      '-Xms${minMem}m',
-      '-Xmx${maxMem}m',
-      '-cp', jars,
-      'dev.puzzleshq.puzzleloader.loader.launch.pieces.ClientPiece',
-      '--mod-folder=${modFolderDir.path}'
-    ];
+      args = [
+        '-Xms${minMem}m',
+        '-Xmx${maxMem}m',
+        '-cp', jars,
+        'dev.puzzleshq.puzzleloader.loader.launch.pieces.ClientPiece',
+        '--mod-folder=${modFolderDir.path}',
+      ];
 
     } else if (loader == "Vanilla") {
       args = [
@@ -337,14 +344,20 @@ class _LauncherHomeState extends State<LauncherHome> {
       return;
     }
 
+    final env = <String, String>{};
+    final key = await ItchSecureStore.loadKey();
+    if (key!.isNotEmpty) {
+      env['ITCHIO_API_KEY'] = key;
+    }
+
     try {
       final process = await Process.start(
         'java',
         args,
         mode: ProcessStartMode.inheritStdio,
+        environment: env.isEmpty ? null : env,
       );
 
-      // track count
       runningInstances.value++;
 
       await process.exitCode.then((_) {
@@ -358,7 +371,6 @@ class _LauncherHomeState extends State<LauncherHome> {
       );
     }
   }
-
 
   OverlayEntry? _activeOverlay;
   Widget _buildInstanceCard(BuildContext context, Map<String, String> instance) {
@@ -651,8 +663,42 @@ class _LauncherHomeState extends State<LauncherHome> {
     );
   }
 
-  void _signIn() {
-    return; //TODO
+  Future<void> _signIn(BuildContext context) async {
+    final existing = await ItchSecureStore.loadKey();
+    final controller = TextEditingController(text: existing ?? "");
+
+    await showDialog<dynamic>(
+    context: context,
+    barrierDismissible: false,
+    builder: (ctx) {
+      return AlertDialog(
+        title: const Text("Itch API Key"),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(
+            hintText: "API key...",
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text("Cancel"),
+          ),
+          TextButton(
+            onPressed: () async {
+              final key = controller.text.trim();
+              if (key.isEmpty) return;
+
+              await ItchSecureStore.saveKey(key);
+              Navigator.of(ctx).pop();
+            },
+            child: const Text("Save"),
+          ),
+        ],
+      );
+    },
+    );
   }
 
   Future<void> _openSettings() async {
@@ -1191,6 +1237,15 @@ class _LauncherHomeState extends State<LauncherHome> {
     );
   }
 
+  Future<void> _load() async {
+    final loadVersion = await _getLauncherVersion();
+    setState(() {
+      version = loadVersion;
+    });
+  }
+
+  String? version;
+
   @override
   Widget build(BuildContext context) {
     final latestThree = instances.reversed.take(3).toList();
@@ -1309,7 +1364,7 @@ class _LauncherHomeState extends State<LauncherHome> {
                   icon: const Icon(Icons.login),
                   tooltip: "Sign In",
                   onPressed: () {
-                    _signIn();
+                    _signIn(context);
                   },
                 ),
                 const SizedBox(height: 16),
@@ -1328,9 +1383,15 @@ class _LauncherHomeState extends State<LauncherHome> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text(
+                      Text(
                         title,
                         style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                      ),
+                      Center(
+                        child: Text(
+                          'Version $version',
+                          style: TextStyle(fontSize: 15, fontWeight: FontWeight.normal, color: Colors.grey),
+                        ),
                       ),
                       ValueListenableBuilder<int>(
                         valueListenable: runningInstances,
@@ -1500,7 +1561,7 @@ class _LauncherHomeState extends State<LauncherHome> {
                           )
                               : Center(
                             child: Text(
-                              "Skins tab",
+                              "Skins tab\n\nComing soon...",
                               style:
                               Theme.of(context).textTheme.titleMedium,
                             ),

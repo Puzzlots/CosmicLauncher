@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
-import 'cache_utils.dart';
+import '../cache_utils.dart';
 
 Future<void> downloadCosmicReachVersion(
     String version,
