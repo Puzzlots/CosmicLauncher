@@ -704,38 +704,52 @@ class _LauncherHomeState extends State<LauncherHome> {
     final controller = TextEditingController(text: existing ?? "");
 
     await showDialog<dynamic>(
-    context: context,
-    barrierDismissible: false,
-    builder: (ctx) {
-      return AlertDialog(
-        title: const Text("Itch API Key"),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          decoration: const InputDecoration(
-            hintText: "API key...",
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text("Cancel"),
-          ),
-          TextButton(
-            onPressed: () async {
-              final key = controller.text.trim();
-              if (key.isEmpty) return;
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        bool obscure = true;
 
-              await ItchSecureStore.saveKey(key);
-              Navigator.of(ctx).pop();
-            },
-            child: const Text("Save"),
-          ),
-        ],
-      );
-    },
+        return StatefulBuilder(
+          builder: (ctx, setState) {
+            return AlertDialog(
+              title: const Text("Itch API Key"),
+              content: TextField(
+                controller: controller,
+                autofocus: true,
+                obscureText: obscure,
+                decoration: InputDecoration(
+                  hintText: "API key...",
+                  suffixIcon: IconButton(
+                    icon: Icon(
+                      obscure ? Icons.visibility_off : Icons.visibility,
+                    ),
+                    onPressed: () => setState(() => obscure = !obscure),
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(ctx).pop(),
+                  child: const Text("Cancel"),
+                ),
+                TextButton(
+                  onPressed: () async {
+                    final key = controller.text.trim();
+                    if (key.isEmpty) return;
+
+                    await ItchSecureStore.saveKey(key);
+                    Navigator.of(ctx).pop();
+                  },
+                  child: const Text("Save"),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
+
 
   Future<void> _openSettings() async {
     final prefs = await PersistentPrefs.open();
