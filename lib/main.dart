@@ -349,6 +349,22 @@ class _LauncherHomeState extends State<LauncherHome> {
     if (key!.isNotEmpty) {
       env['ITCHIO_API_KEY'] = key;
     }
+    var raw = prefs.getValue<dynamic>('defaults_instance_vars').toString().split(',');
+
+
+    env.addAll(Map.fromEntries(
+      raw
+          .where((e) => e.contains('='))
+          .map((e) {
+            final parts = e.split('=');
+            return MapEntry(
+              parts[0].trim(),
+              parts.sublist(1).join('=').trim(),
+            );
+          })
+      ,));
+
+    args.addAll(prefs.getValue<dynamic>('defaults_instance_args').toString().split(','));
 
     try {
       final startTime = DateTime.now().toUtc();
@@ -1190,6 +1206,7 @@ class _LauncherHomeState extends State<LauncherHome> {
                                           PersistentTextField(
                                             decoration: InputDecoration(
                                               labelText: "Java Arguments", //TODO
+                                              hintText: "Comma to separate",
                                               border: darkGreyBorder,
                                             ), keyName: 'defaults_instance_args',
                                           ),
@@ -1197,6 +1214,7 @@ class _LauncherHomeState extends State<LauncherHome> {
                                           PersistentTextField(
                                             decoration: InputDecoration(
                                               labelText: "Environment Variables", //TODO
+                                              hintText: "Comma to separate",
                                               border: darkGreyBorder,
                                             ), keyName: 'defaults_instance_vars',
                                           ),
