@@ -59,7 +59,7 @@ class LauncherHome extends StatefulWidget {
 class _LauncherHomeState extends State<LauncherHome> {
   final GlobalKey<ScaffoldMessengerState> _scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
   final instanceManager = InstanceManager();
-  late List<Map<String, String>> instances = [];
+  late List<Map<String, dynamic>> instances = [];
 
   Future<String> _getLauncherVersion() async {
     final info = await PackageInfo.fromPlatform();
@@ -80,7 +80,7 @@ class _LauncherHomeState extends State<LauncherHome> {
     _load();
   }
 
-  Future<void> _addInstance({Map<String, String>? details}) async {
+  Future<void> _addInstance({Map<String, dynamic>? details}) async {
     details ??= await askForInstanceDetails(context);
     if (details == null) return;
 
@@ -88,7 +88,7 @@ class _LauncherHomeState extends State<LauncherHome> {
     do {
       final short = nanoid(5);
       id = '${details['name']}-$short';
-    } while (await instanceManager.loadInstance(id) != null);
+    } while (await instanceManager.loadInstance(id) != null); //oh its this
 
     details['uuid'] = id;
     await instanceManager.saveInstance(id, details);
@@ -292,7 +292,7 @@ class _LauncherHomeState extends State<LauncherHome> {
 
   final runningInstances = ValueNotifier<int>(0);
 
-  Future<void> _launchInstance(Map<String, String> instance) async {
+  Future<void> _launchInstance(Map<String, dynamic> instance) async {
     if (!mounted) return;
 
     ScaffoldMessenger.of(context).showSnackBar(
@@ -351,6 +351,7 @@ class _LauncherHomeState extends State<LauncherHome> {
     }
 
     try {
+      final startTime = DateTime.now().toUtc();
       final process = await Process.start(
         'java',
         args,
@@ -361,7 +362,11 @@ class _LauncherHomeState extends State<LauncherHome> {
       runningInstances.value++;
 
       await process.exitCode.then((_) {
+        final endTime = DateTime.now().toUtc();
         runningInstances.value--;
+        instance['playtime'] = (instance['playtime'] ?? 0) + endTime.difference(startTime).inSeconds;
+        instanceManager.saveInstance(instance['uuid'] as String, instance); //for some reason it still doesnt want to work :(, im using a function i made before and it still doesnt want to work
+        _loadInstances();
       });
 
     } catch (e) {
@@ -373,7 +378,7 @@ class _LauncherHomeState extends State<LauncherHome> {
   }
 
   OverlayEntry? _activeOverlay;
-  Widget _buildInstanceCard(BuildContext context, Map<String, String> instance) {
+  Widget _buildInstanceCard(BuildContext context, Map<String, dynamic> instance) {
     bool hovering = false;
 
     void showContextMenu(Offset position) {
@@ -463,7 +468,7 @@ class _LauncherHomeState extends State<LauncherHome> {
                         icon: Icons.folder_open,
                         label: "Open Folder",
                         onTap: () {
-                          revealFile(instanceManager.getInstanceFilePath(instance['uuid']!));
+                          revealFile(instanceManager.getInstanceFilePath(instance['uuid'] as String));
                           _activeOverlay?.remove();
                           _activeOverlay = null;
                         },
@@ -473,7 +478,7 @@ class _LauncherHomeState extends State<LauncherHome> {
                         icon: Icons.content_copy,
                         label: "Copy Path",
                         onTap: () {
-                          copyToClipboard(instanceManager.getInstanceFilePath(instance['uuid']!));
+                          copyToClipboard(instanceManager.getInstanceFilePath(instance['uuid'] as String));
                           _activeOverlay?.remove();
                           _activeOverlay = null;
                           ScaffoldMessenger.of(context).showSnackBar(
@@ -552,7 +557,7 @@ class _LauncherHomeState extends State<LauncherHome> {
                       ),
                     ),
                     Text(
-                      instance["name"]!,
+                      instance["name"] as String,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
@@ -560,14 +565,26 @@ class _LauncherHomeState extends State<LauncherHome> {
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      "${instance['loader']} | ${instance['version']}",
-                      style: const TextStyle(
-                        fontSize: 13,
-                        color: Colors.white60,
-                      ),
+                    Row(
+                      children: [
+                        Text(
+                          "${instance['loader']} | ${instance['version']}",
+                          style: const TextStyle(
+                            fontSize: 13,
+                            color: Colors.white60,
+                          ),
+                        ),
+                        const Spacer(),
+                        Text(
+                          instance['playtime'] == null ? '' : "Played for ${getPlaytimeString(instance)}", //crab theres an example of how to do it with the number of running instances string
+                          style: const TextStyle(
+                            fontSize: 13,
+                            color: Colors.grey,
+                          ),
+                        ),
+                      ],
                     ),
+
                   ],
                 ),
               ),
@@ -577,6 +594,24 @@ class _LauncherHomeState extends State<LauncherHome> {
       ),
     );
   }
+
+  String formatPlaytime(int seconds) {
+    final d = seconds ~/ 86400;
+    if (d > 0) return '${d}d';
+
+    final h = seconds ~/ 3600;
+    if (h > 0) return '${h}h';
+
+    final m = seconds ~/ 60;
+    if (m > 0) return '${m}m';
+
+    return '${seconds}s';
+  }
+
+  String getPlaytimeString(Map<String, dynamic> instance){
+    return formatPlaytime(instance['playtime'] as int? ?? 0);
+  }
+
 
   Widget _contextItem(
       BuildContext context, {
@@ -623,7 +658,7 @@ class _LauncherHomeState extends State<LauncherHome> {
     color: Colors.white12,
   );
 
-  void _confirmDelete(BuildContext context, Map<String, String> instance) {
+  void _confirmDelete(BuildContext context, Map<String, dynamic> instance) {
     showDialog<void> (
       context: context,
       builder: (ctx) => AlertDialog(
@@ -642,13 +677,14 @@ class _LauncherHomeState extends State<LauncherHome> {
             ),
             onPressed: () {
               setState(() {
-                instances.remove(instance);@override
+                instances.remove(instance);
+                @override
                 // ignore: unused_element
                 void initState() {
                   super.initState();
                   _loadInstances();
                 }
-                instanceManager.deleteInstance(instance['uuid']!);
+                instanceManager.deleteInstance(instance['uuid']);
               });
               Navigator.pop(ctx);
 
@@ -1255,22 +1291,22 @@ class _LauncherHomeState extends State<LauncherHome> {
     String sortBy = 'Name';
     String groupBy = 'None';
 
-    Future<List<Map<String, String>>> getProcessedInstances() async {
+    Future<List<Map<String, dynamic>>> getProcessedInstances() async {
       // Filter
       var filtered = instances.where((i) {
-        return i['name']!.toLowerCase().contains(searchQuery.toLowerCase());
+        return i['name']!.toLowerCase().contains(searchQuery.toLowerCase()) as bool;
       }).toList();
 
       // Sort
       filtered.sort((a, b) {
         switch (sortBy) {
           case 'Game Version':
-            return a['version']!.compareTo(b['version']!);
+            return a['version']!.compareTo(b['version']!) as int;
           case 'Loader':
-            return a['loader']!.compareTo(b['loader']!);
+            return a['loader']!.compareTo(b['loader']!) as int;
           case 'Name':
           default:
-            return a['name']!.compareTo(b['name']!);
+            return a['name']!.compareTo(b['name']!) as int;
         }
       });
 
@@ -1278,7 +1314,7 @@ class _LauncherHomeState extends State<LauncherHome> {
       if (groupBy != 'None') {
         filtered.sort((a, b) {
           final g = groupBy == 'Loader' ? 'loader' : 'version';
-          return a[g]!.compareTo(b[g]!);
+          return a[g]!.compareTo(b[g]!) as int;
         });
       }
 
@@ -1482,7 +1518,7 @@ class _LauncherHomeState extends State<LauncherHome> {
 
                                 // Grid
                                   Expanded(
-                                    child: FutureBuilder<List<Map<String, String>>>(
+                                    child: FutureBuilder<List<Map<String, dynamic>>>(
                                       future: getProcessedInstances(),
                                       builder: (context, snapshot) {
                                         if (snapshot.connectionState != ConnectionState.done) {
@@ -1511,10 +1547,10 @@ class _LauncherHomeState extends State<LauncherHome> {
                                         }
 
                                         // Grouped view
-                                        final grouped = <String, List<Map<String, String>>>{};
+                                        final grouped = <String, List<Map<String, dynamic>>>{};
                                         for (var inst in list) {
                                           final key = groupBy == 'Loader' ? inst['loader']! : inst['version']!;
-                                          grouped.putIfAbsent(key, () => []).add(inst);
+                                          grouped.putIfAbsent(key as String, () => []).add(inst);
                                         }
 
                                         return ListView(
@@ -1578,4 +1614,4 @@ class _LauncherHomeState extends State<LauncherHome> {
       ),
     );
   }
-}
+} //ehh why not (〃￣︶￣)人(￣︶￣〃)（づ￣3￣）づ╭❤️～(～﹃～)~zZ||ヽ(*￣▽￣*)ノミ|Ю||ヽ(*￣▽￣*)ノミ|Ю☆⌒(*＾-゜)vo(*°▽°*)o

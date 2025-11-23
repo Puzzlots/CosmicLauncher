@@ -20,31 +20,34 @@ class InstanceManager {
     return p.join(_instancesDir.path, '$id.json');
   }
 
-  Future<void> saveInstance(String id, Map<String, String> details) async {
+  Future<void> saveInstance(String id, Map<String, dynamic> details) async {
     final file = File(p.join(_instancesDir.path, '$id.json'));
     await file.writeAsString(jsonEncode(details));
   }
 
-  Future<Map<String, String>?> loadInstance(String id) async {
+  Future<Map<String, dynamic>?> loadInstance(String id) async {
     final file = File(p.join(_instancesDir.path, '$id.json'));
     if (!await file.exists()) return null;
-    final data = jsonDecode(await file.readAsString()) as Map<String, dynamic>;
-    return data.map((k, v) => MapEntry(k, v.toString()));
+
+    return jsonDecode(await file.readAsString()) as Map<String, dynamic>;
   }
 
-  Future<List<Map<String, String>>> loadAllInstances() async {
-    final files = _instancesDir.listSync().whereType<File>().where((f) => f.path.endsWith('.json'));
-    final List<Map<String, String>> instances = [];
-    for (final f in files) {
-      final data = jsonDecode(await f.readAsString()) as Map<String, dynamic>;
-      instances.add(data.map((k, v) => MapEntry(k, v.toString())));
-    }
-    return instances;
+  Future<List<Map<String, dynamic>>> loadAllInstances() async {
+    final ids = _instancesDir
+        .listSync()
+        .whereType<File>()
+        .where((f) => f.path.endsWith('.json'))
+        .map((f) => f.uri.pathSegments.last.split('.').first)
+        .toList();
+
+    final raw = await Future.wait(ids.map(loadInstance));
+    return raw.whereType<Map<String, dynamic>>().toList();
   }
 
-  Future<void> deleteInstance(String id) async {
-    final file = File(p.join(_instancesDir.path, '$id.json'));
-    if (await file.exists()) await file.delete();
+
+  Future<void> deleteInstance(dynamic id) async {
+    final file = File(p.join(_instancesDir.path, '$id.json')); // did u accidentally press the exit button?
+    if (await file.exists()) await file.delete(); //shit it crashed idk if that was me pressing the exit button?, it was when i pressed enter on the search
   }
 
   Future<void> clearAll() async {
