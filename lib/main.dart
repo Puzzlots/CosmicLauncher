@@ -1205,7 +1205,7 @@ class _LauncherHomeState extends State<LauncherHome> {
                                           const SizedBox(height: 16),
                                           PersistentTextField(
                                             decoration: InputDecoration(
-                                              labelText: "Java Arguments", //TODO
+                                              labelText: "Java Arguments",
                                               hintText: "Comma to separate",
                                               border: darkGreyBorder,
                                             ), keyName: 'defaults_instance_args',
@@ -1213,7 +1213,7 @@ class _LauncherHomeState extends State<LauncherHome> {
                                           const SizedBox(height: 8),
                                           PersistentTextField(
                                             decoration: InputDecoration(
-                                              labelText: "Environment Variables", //TODO
+                                              labelText: "Environment Variables",
                                               hintText: "Comma to separate",
                                               border: darkGreyBorder,
                                             ), keyName: 'defaults_instance_vars',
