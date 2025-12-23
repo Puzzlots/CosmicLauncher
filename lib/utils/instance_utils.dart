@@ -55,4 +55,9 @@ class InstanceManager {
       if (f is File && f.path.endsWith('.json')) await f.delete();
     }
   }
+
+  Future<bool> instanceExists(String id) async {
+    final file = File(getInstanceFilePath(id));
+    return file.exists();
+  }
 }

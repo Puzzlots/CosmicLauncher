@@ -1,7 +1,7 @@
 name: polaris
 description: An Interstellar Cosmic Launcher.
 publish_to: 'none'
-version: 0.3.0+0
+version: 0.4.0+0
 
 environment:
   sdk: ^3.9.0-0
@@ -26,7 +26,7 @@ dependencies:
   path: ^1.9.1
   nanoid: ^1.0.0
   archive: ^4.0.7
-  flutter_secure_storage: ^9.2.4
+  flutter_secure_storage: ^10.0.0
   package_info_plus: ^9.0.0
 
 dev_dependencies:

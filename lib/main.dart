@@ -68,9 +68,15 @@ class _LauncherHomeState extends State<LauncherHome> {
 
   LauncherTab activeTab = LauncherTab.library; // track which tab is active
 
-  Future<void> _loadInstances() async {
+  Future<void>  _loadInstances() async {
     instances = await instanceManager.loadAllInstances();
     setState(() {}); // trigger UI update
+
+    // Trigger file download
+    for (var instance in instances) {if (instance['downloaded'] != true) {
+      if (!mounted) return;
+      unawaited(_refreshInstance(context, instance));
+    }}
   }
 
   @override
@@ -108,7 +114,7 @@ class _LauncherHomeState extends State<LauncherHome> {
     }
   };
 
-  Future<Map<String, String>?> askForInstanceDetails(BuildContext context) async {
+  Future<Map<String, dynamic>?> askForInstanceDetails(BuildContext context) async {
     final TextEditingController nameController = TextEditingController();
     String selectedVersion = "latest";
 
@@ -145,7 +151,7 @@ class _LauncherHomeState extends State<LauncherHome> {
       );
     }
 
-    return showDialog<Map<String, String>>(
+    return showDialog<Map<String, dynamic>>(
       context: context,
       barrierDismissible: false,
       builder: (ctx) {
@@ -242,42 +248,28 @@ class _LauncherHomeState extends State<LauncherHome> {
                 ElevatedButton(
                   onPressed: () async {
                     final navigator = Navigator.of(ctx);
-                    final messenger = ScaffoldMessenger.of(context);
                     if (!onSubVersionPage && selectedLoader != "Vanilla") {
                       goToSubVersionPage();
                       return;
                     }
 
                     String versionInfo = selectedVersion;
-                    var loaderInfo = {
+                    Map<String,dynamic> loaderInfo = {
                       "name": nameController.text.trim(),
                       "version": versionInfo,
                       "loader": selectedLoader,
                     };
 
-                    loaderInfo['version'] = resolveLatest(currentVersions, "Vanilla", "Client", loaderInfo['version']);
-                    unawaited(downloadCosmicReachVersion(loaderInfo['version']!
-                    ).catchError((dynamic e) {
-                      messenger.showSnackBar(
-                        SnackBar(content: Text("Failed to download Cosmic Reach ${loaderInfo['version']}: $e")),
-                      );
-                    }));
+                    loaderInfo['version'] = resolveLatest(currentVersions, "Vanilla", "Client", loaderInfo['version'] as String);
 
                     if (selectedLoader == "Puzzle") {
                       loaderInfo.addEntries(selectedSubVersions.entries);
                       loaderInfo.addAll({"versions": "$versionInfo | ${selectedSubVersions.entries.map((e) => "${e.key}:${e.value}").join(", ")}"});
 
-                      loaderInfo['Core'] = resolveLatest(currentVersions, "Puzzle", "Core", loaderInfo['Core']);
-                      loaderInfo['Cosmic'] = resolveLatest(currentVersions, "Puzzle", "Cosmic", loaderInfo['Cosmic']);
-
-                      unawaited(downloadPuzzleVersion(loaderInfo['Core']!, loaderInfo['Cosmic']!
-                      ).catchError((dynamic e) {
-                        messenger.showSnackBar(
-                          SnackBar(content: Text("Failed to download Puzzle ${loaderInfo['Core']}, ${loaderInfo['Cosmic']}: $e")),
-                        );
-                      }));
-
+                      loaderInfo['Core'] = resolveLatest(currentVersions, "Puzzle", "Core", loaderInfo['Core'] as String);
+                      loaderInfo['Cosmic'] = resolveLatest(currentVersions, "Puzzle", "Cosmic", loaderInfo['Cosmic'] as String);
                     } else {loaderInfo.addEntries(selectedSubVersions.entries);}
+                    loaderInfo['downloaded'] = false;
                     navigator.pop(loaderInfo);
                   },
                   child: Text(onSubVersionPage ? "Create" : (selectedLoader == "Vanilla" ? "Create" : "Next")),
@@ -294,6 +286,10 @@ class _LauncherHomeState extends State<LauncherHome> {
 
   Future<void> _launchInstance(Map<String, dynamic> instance) async {
     if (!mounted) return;
+    if (instance['downloading'] == true) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("${instance['name']} is still downloading")),);
+      return;
+    }
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text("Launching ${instance['name']}...")),
@@ -311,7 +307,7 @@ class _LauncherHomeState extends State<LauncherHome> {
     List<String> args;
 
     if (loader == 'Puzzle') {
-      final libDir = Directory("${getPersistentCacheDir().path}/puzzle_runtime");
+      final libDir = Directory("${getPersistentCacheDir().path}/puzzle_runtime/${instance['Core']}-${instance['Cosmic']}");
       final sep = Platform.isWindows ? ';' : ':';
       var jars = libDir
           .listSync()
@@ -346,7 +342,7 @@ class _LauncherHomeState extends State<LauncherHome> {
 
     final env = <String, String>{};
     final key = await ItchSecureStore.loadKey();
-    if (key!.isNotEmpty) {
+    if (key != null) {
       env['ITCHIO_API_KEY'] = key;
     }
     var raw = prefs.getValue<dynamic>('defaults_instance_vars').toString().split(',');
@@ -396,6 +392,7 @@ class _LauncherHomeState extends State<LauncherHome> {
   OverlayEntry? _activeOverlay;
   Widget _buildInstanceCard(BuildContext context, Map<String, dynamic> instance) {
     bool hovering = false;
+
 
     void showContextMenu(Offset position) {
       _activeOverlay?.remove();
@@ -515,6 +512,18 @@ class _LauncherHomeState extends State<LauncherHome> {
                           _confirmDelete(context, instance);
                         },
                       ),
+                      _contextItem(
+                        context,
+                        icon: Icons.refresh,
+                        label: "Refresh",
+                        hoverColor: Colors.blue.withValues(alpha: 0.15),
+                        highlightColor: Colors.blue,
+                        onTap: () {
+                          _refreshInstance(context, instance);
+                          _activeOverlay?.remove();
+                          _activeOverlay = null;
+                        },
+                      ),
                     ],
                   ),
                 ),
@@ -530,78 +539,79 @@ class _LauncherHomeState extends State<LauncherHome> {
     return KeyedSubtree(
       child: StatefulBuilder(
         builder: (context, setHover) {
+          final visualState = instance['downloading'] == true
+              ? InstanceVisualState.downloading
+              : hovering
+              ? InstanceVisualState.hover
+              : InstanceVisualState.idle;
+
           return MouseRegion(
             onEnter: (_) => setHover(() => hovering = true),
             onExit: (_) => setHover(() => hovering = false),
             child: GestureDetector(
               onSecondaryTapDown: (details) => showContextMenu(details.globalPosition),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 150),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF1E1E1E),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: hovering
-                        ? Theme.of(context).colorScheme.secondary
-                        : Colors.white24,
+              child: CardBorderSpinner(
+                active: instance['downloading'] == true,
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 150),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1E1E1E),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: hovering
+                          ? Theme.of(context).colorScheme.secondary
+                          : Colors.white24,
+                    ),
                   ),
-                ),
-                padding: const EdgeInsets.all(12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: Center(
-                        child: AnimatedSwitcher(
-                          duration: const Duration(milliseconds: 150),
-                          switchInCurve: Curves.easeIn,
-                          switchOutCurve: Curves.easeOut,
-                          child: hovering
-                              ? IconButton(
-                            key: UniqueKey(),
-                            icon: const Icon(Icons.play_arrow, size: 48),
-                            color: Theme.of(context).colorScheme.primary,
-                            onPressed: () => _launchInstance(instance),
-                          )
-                              : Icon(
-                            Icons.extension,
-                            size: 48,
-                            color: Colors.white54,
-                            key: UniqueKey(),
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Center(
+                          child: AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 150),
+                            switchInCurve: Curves.easeIn,
+                            switchOutCurve: Curves.easeOut,
+                            child: _InstanceCenterIcon(
+                              state: visualState,
+                              onPlay: () => _launchInstance(instance),
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                    Text(
-                      instance["name"] as String,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
+                      Text(
+                        instance["name"] as String,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
-                    ),
-                    Row(
-                      children: [
-                        Text(
-                          "${instance['loader']} | ${instance['version']}",
-                          style: const TextStyle(
-                            fontSize: 13,
-                            color: Colors.white60,
+                      Row(
+                        children: [
+                          Text(
+                            "${instance['loader']} | ${instance['version']}",
+                            style: const TextStyle(
+                              fontSize: 13,
+                              color: Colors.white60,
+                            ),
                           ),
-                        ),
-                        const Spacer(),
-                        Text(
-                          instance['playtime'] == null ? '' : "Played for ${getPlaytimeString(instance)}", //crab theres an example of how to do it with the number of running instances string
-                          style: const TextStyle(
-                            fontSize: 13,
-                            color: Colors.grey,
+                          const Spacer(),
+                          Text(
+                            instance['playtime'] == null
+                                ? ''
+                                : "Played for ${getPlaytimeString(instance)}",
+                            style: const TextStyle(
+                              fontSize: 13,
+                              color: Colors.grey,
+                            ),
                           ),
-                        ),
-                      ],
-                    ),
-
-                  ],
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -610,6 +620,7 @@ class _LauncherHomeState extends State<LauncherHome> {
       ),
     );
   }
+
 
   String formatPlaytime(int seconds) {
     final d = seconds ~/ 86400;
@@ -673,6 +684,46 @@ class _LauncherHomeState extends State<LauncherHome> {
     height: 1,
     color: Colors.white12,
   );
+
+  Future<void> _refreshInstance(
+      BuildContext context,
+      Map<String, dynamic> instance,
+      ) async {
+    if (instance['downloading'] == true) return;
+
+    setState(() {
+      instance['downloading'] = true;
+    });
+
+    try {
+      await downloadCosmicReachVersion(
+        instance['version']! as String,
+      );
+
+      if (instance['loader'] == 'Puzzle') {
+        await downloadPuzzleVersion(
+          instance['Core']! as String,
+          instance['Cosmic']! as String,
+        );
+      }
+      if (!await instanceManager.instanceExists(instance['uuid'] as String)) return;
+      await instanceManager.saveInstance(instance['uuid'] as String, {...instance, "downloaded":true}..remove('downloading'));
+    } catch (e) {
+      if (!context.mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            "Failed to refresh instance ${instance['version']}: $e",
+          ),
+        ),
+      );
+    } finally {
+      setState(() {
+        instance['downloading'] = false;
+      });
+    }
+  }
 
   void _confirmDelete(BuildContext context, Map<String, dynamic> instance) {
     showDialog<void> (
@@ -1647,3 +1698,142 @@ class _LauncherHomeState extends State<LauncherHome> {
     );
   }
 } //ehh why not (〃￣︶￣)人(￣︶￣〃)（づ￣3￣）づ╭❤️～(～﹃～)~zZ||ヽ(*￣▽￣*)ノミ|Ю||ヽ(*￣▽￣*)ノミ|Ю☆⌒(*＾-゜)vo(*°▽°*)o
+
+class BorderSpinnerPainter extends CustomPainter {
+  final double progress;
+  final Color color;
+  final double strokeWidth;
+  final double radius;
+
+  BorderSpinnerPainter({
+    required this.progress,
+    required this.color,
+    this.strokeWidth = 2,
+    this.radius = 12,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Offset.zero & size;
+    final rrect = RRect.fromRectAndRadius(rect, Radius.circular(radius));
+
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth
+      ..strokeCap = StrokeCap.round;
+
+    final path = Path()..addRRect(rrect);
+    final metrics = path.computeMetrics().first;
+
+    final length = metrics.length;
+    final start = length * progress;
+    final end = start + length * 0.25; // spinner segment length
+
+    Path extract;
+    if (end <= length) {
+      extract = metrics.extractPath(start, end);
+    } else {
+      extract = Path()
+        ..addPath(metrics.extractPath(start, length), Offset.zero)
+        ..addPath(metrics.extractPath(0, end - length), Offset.zero);
+    }
+
+    canvas.drawPath(extract, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant BorderSpinnerPainter oldDelegate) =>
+      oldDelegate.progress != progress;
+}
+
+class CardBorderSpinner extends StatefulWidget {
+  final Widget child;
+  final bool active;
+
+  const CardBorderSpinner({
+    super.key,
+    required this.child,
+    required this.active,
+  });
+
+  @override
+  State<CardBorderSpinner> createState() => _CardBorderSpinnerState();
+}
+
+class _CardBorderSpinnerState extends State<CardBorderSpinner>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 2),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        widget.child,
+        if (widget.active)
+          Positioned.fill(
+            child: AnimatedBuilder(
+              animation: _controller,
+              builder: (_, _) => CustomPaint(
+                painter: BorderSpinnerPainter(
+                  progress: _controller.value,
+                  color: Colors.blueAccent,
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+enum InstanceVisualState {
+  idle,
+  hover,
+  downloading,
+}
+
+class _InstanceCenterIcon extends StatelessWidget {
+  final InstanceVisualState state;
+  final VoidCallback onPlay;
+
+  const _InstanceCenterIcon({
+    required this.state,
+    required this.onPlay,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    switch (state) {
+      case InstanceVisualState.hover:
+        return IconButton(
+          icon: const Icon(Icons.play_arrow, size: 48),
+          color: Theme.of(context).colorScheme.primary,
+          onPressed: onPlay,
+        );
+
+      default:
+        return const Icon(
+          Icons.extension,
+          size: 48,
+          color: Colors.white54,
+        );
+    }
+  }
+}
+

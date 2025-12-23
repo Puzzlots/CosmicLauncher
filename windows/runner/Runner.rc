@@ -89,12 +89,12 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "com.example" "\0"
-            VALUE "FileDescription", "simplistic_calculator" "\0"
+            VALUE "CompanyName", "dev.puzzlots" "\0"
+            VALUE "FileDescription", "A launcher for cosmic reach" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "simplistic_calculator" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2023 com.example. All rights reserved." "\0"
-            VALUE "OriginalFilename", "simplistic_calculator.exe" "\0"
+            VALUE "InternalName", "polaris_launcher" "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2025 dev.puzzlots. All rights reserved." "\0"
+            VALUE "OriginalFilename", "polaris_launcher.exe" "\0"
             VALUE "ProductName", "Polaris launcher" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END

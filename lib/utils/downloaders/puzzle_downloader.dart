@@ -8,7 +8,7 @@ Future<void> downloadPuzzleVersion(
     String coreVersion,
     String cosmicVersion
     ) async {
-  final libDir = Directory("${getPersistentCacheDir().path}/puzzle_runtime");
+  final libDir = Directory("${getPersistentCacheDir().path}/puzzle_runtime/$coreVersion-$cosmicVersion");
   await libDir.create(recursive: true);
 
   final coreClientJar = "puzzle-loader-core-$coreVersion-client.jar";
