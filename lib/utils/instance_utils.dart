@@ -1,14 +1,23 @@
 import 'dart:convert';
 import 'dart:io';
+
+import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 
 import '../main.dart';
 import 'cache_utils.dart';
 
 class InstanceManager {
+  static final InstanceManager _instance =
+  InstanceManager._internal(appName: title);
+
+  factory InstanceManager() => _instance;
+
+  InstanceManager._internal({required this.appName});
+
   final String appName;
 
-  InstanceManager({this.appName = title});
+  Map<String, Map<String, List<Map<String, String>>>> currentVersions = {};
 
   Directory get _instancesDir {
     final dir = Directory(p.join(getPersistentCacheDir(appName: appName).path, 'instances'));
@@ -37,8 +46,16 @@ class InstanceManager {
         .listSync()
         .whereType<File>()
         .where((f) => f.path.endsWith('.json'))
-        .map((f) => f.uri.pathSegments.last.split('.').first)
+        .map((f) {
+          final name = f.uri.pathSegments.last;
+          final parts = name.split('.');
+          return parts.length > 1 ? parts.sublist(0, parts.length - 1).join('.') : name;
+        })
         .toList();
+
+    if (kDebugMode) {
+      print("Loaded: $ids");
+    }
 
     final raw = await Future.wait(ids.map(loadInstance));
     return raw.whereType<Map<String, dynamic>>().toList();

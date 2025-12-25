@@ -3,11 +3,15 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:polaris/utils/cache_utils.dart';
+import 'package:polaris/utils/general_utils.dart';
+import 'package:polaris/utils/version_cache.dart';
 
 Future<void> downloadPuzzleVersion(
     String coreVersion,
     String cosmicVersion
     ) async {
+  coreVersion = resolveLatest('Puzzle', 'Core', coreVersion);
+  cosmicVersion = resolveLatest('Puzzle', 'Cosmic', cosmicVersion);
   final libDir = Directory("${getPersistentCacheDir().path}/puzzle_runtime/$coreVersion-$cosmicVersion");
   await libDir.create(recursive: true);
 
@@ -47,9 +51,12 @@ Future<void> downloadPuzzleVersion(
     final group = dep['groupId'] as String;
     final artifact = dep['artifactId'] as String;
     final version = dep['version'] as String;
+    final fileName = "$artifact-$version.jar";
+    final dir = "${libDir.path}/$fileName";
 
-    final file = File("${libDir.path}/$artifact-$version.jar");
+    final file = File(dir);
     if (await file.exists()) continue;
+    await findAndCopyFile(searchDir: Directory(libDir.path), fileName: fileName, destinationDir: Directory(dir));
 
     bool downloaded = false;
 
@@ -89,7 +96,7 @@ Future<void> downloadJars(List<List<String>> files, Directory libDir) async {
     if (kDebugMode) {
       print("Downloading $url");
 
-    }await tryDownload(url, file);
+    } await tryDownload(url, file);
   }
 }
 

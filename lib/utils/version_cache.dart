@@ -1,42 +1,47 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
+import 'instance_utils.dart';
+
 class VersionCache {
-  /// Fetch versions: serve cached immediately, then update with remote if newer
-  static Future<Map<String, Map<String, List<Map<String, String>>>>> fetchVersions({
+  static Future<void> fetchVersions({
     required Map<String, Map<String, String>> loaderRepos,
     required String cacheDirPath,
     required void Function(Map<String, Map<String, List<Map<String, String>>>>) onUpdate,
   }) async {
-    final aggregated = <String, Map<String, List<Map<String, String>>>>{};
-
-    // 1️⃣ Load cached versions immediately
     for (final loaderEntry in loaderRepos.entries) {
       final loader = loaderEntry.key;
-      aggregated[loader] = {};
+
+      final versions = InstanceManager().currentVersions;
+      versions.putIfAbsent(loader, () => {});
+
       for (final modTypeEntry in loaderEntry.value.entries) {
         final modType = modTypeEntry.key;
         final cacheFile = File('$cacheDirPath/$loader-$modType.json');
+
         Map<String, dynamic>? localData;
         if (cacheFile.existsSync()) {
           try {
-            localData = jsonDecode(cacheFile.readAsStringSync()) as Map<String, dynamic>;
+            localData =
+            jsonDecode(cacheFile.readAsStringSync()) as Map<String, dynamic>;
           } catch (_) {}
         }
-        aggregated[loader]![modType] = _parseVersions(localData);
+
+        versions[loader]![modType] = _parseVersions(localData);
       }
     }
 
-    // Call UI with cached data immediately
-    onUpdate(aggregated);
+    onUpdate(InstanceManager().currentVersions);
 
     await Future(() async {
-      final updatedAggregated = <String, Map<String, List<Map<String, String>>>>{};
-
       for (final loaderEntry in loaderRepos.entries) {
         final loader = loaderEntry.key;
-        updatedAggregated[loader] = {};
+
+        final versions = InstanceManager().currentVersions;
+        versions.putIfAbsent(loader, () => {});
+
         for (final modTypeEntry in loaderEntry.value.entries) {
           final modType = modTypeEntry.key;
           final repo = modTypeEntry.value;
@@ -45,35 +50,37 @@ class VersionCache {
           Map<String, dynamic>? localData;
           if (cacheFile.existsSync()) {
             try {
-              localData = jsonDecode(cacheFile.readAsStringSync()) as Map<String, dynamic>;
+              localData =
+              jsonDecode(cacheFile.readAsStringSync()) as Map<String, dynamic>;
             } catch (_) {}
           }
 
           Map<String, dynamic>? remoteData;
           try {
-            final url = 'https://raw.githubusercontent.com/$repo/versions.json';
+            final url =
+                'https://raw.githubusercontent.com/$repo/versions.json';
             final response = await http.get(Uri.parse(url));
-            if (response.statusCode == 200) remoteData = jsonDecode(response.body) as Map<String, dynamic>;
+            if (response.statusCode == 200) {
+              remoteData = jsonDecode(response.body) as Map<String, dynamic>;
+            }
           } catch (_) {}
 
-          // Only overwrite if remote is newer
           final localLatest = _getLatestVersionId(localData);
           final remoteLatest = _getLatestVersionId(remoteData);
+
           if (remoteLatest != null && remoteLatest != localLatest) {
             await cacheFile.parent.create(recursive: true);
             await cacheFile.writeAsString(jsonEncode(remoteData));
             localData = remoteData;
           }
 
-          updatedAggregated[loader]![modType] = _parseVersions(localData);
+          versions[loader]![modType] = _parseVersions(localData);
         }
       }
 
       // Call UI again with updated remote versions
-      onUpdate(updatedAggregated);
+      onUpdate(InstanceManager().currentVersions);
     });
-
-    return aggregated; // return cached immediately
   }
 
   static List<Map<String, String>> _parseVersions(Map<String, dynamic>? data) {
@@ -143,10 +150,11 @@ class VersionCache {
   }
 }
 
-String resolveLatest(Map<String, Map<String, List<Map<String, String>>>> aggregated, String loader, String modType, String? version) {
+String resolveLatest(String loader, String modType, String? version) {
+
   if (version != "latest" && version != null) return version;
 
-  final list = aggregated[loader]?[modType];
+  final list = InstanceManager().currentVersions[loader]?[modType];
   if (list == null || list.isEmpty) {
     throw StateError("No versions available for $loader/$modType");
   }

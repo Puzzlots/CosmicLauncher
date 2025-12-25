@@ -1,6 +1,8 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:path/path.dart' as p;
 
 Future<void> browseFolder(String? path) async {
   final dir = Directory(path!);
@@ -20,19 +22,41 @@ Future<void> browseFolder(String? path) async {
   return;
 }
 
-void revealFile(String filePath) {
-  if (Platform.isWindows) {
-    // explorer /select,"C:\path\to\file.txt"
-    Process.run('explorer', ['/select,', filePath]);
-  } else if (Platform.isMacOS) {
-    // open Finder and select the file
-    Process.run('open', ['-R', filePath]);
-  } else if (Platform.isLinux) {
-    // use xdg-open to open the folder (cannot reliably highlight)
-    Process.run('xdg-open', [Directory(filePath).parent.path]);
+extension StringExtension on String {
+  String capitalize() {
+    if (isEmpty) return this;
+    return this[0].toUpperCase() + substring(1);
+  }
+
+  Future<void> copyToClipboard() async {
+    await Clipboard.setData(ClipboardData(text: this));
+  }
+
+  void revealFile() {
+    if (Platform.isWindows) {
+      Process.run('explorer', ['/select,', this]);
+    } else if (Platform.isMacOS) {
+      Process.run('open', ['-R', this]);
+    } else if (Platform.isLinux) {
+      Process.run('xdg-open', [Directory(this).parent.path]);
+    }
   }
 }
 
-Future<void> copyToClipboard(String text) async {
-  await Clipboard.setData(ClipboardData(text: text));
+Future<bool> findAndCopyFile({
+  required Directory searchDir,
+  required String fileName,
+  required Directory destinationDir,
+}) async {
+  await for (final entity in searchDir.list(recursive: true)) {
+    if (entity is File && p.basename(entity.path) == fileName) {
+      if (kDebugMode) {
+        print('Copying $fileName to ${destinationDir.path} from ${entity.path}');
+      }
+      await destinationDir.create(recursive: true);
+      await entity.copy(p.join(destinationDir.path, fileName));
+      return true;
+    }
+  }
+  return false;
 }

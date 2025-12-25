@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:dropdown_search/dropdown_search.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:nanoid/nanoid.dart';
@@ -68,11 +70,22 @@ class _LauncherHomeState extends State<LauncherHome> {
 
   LauncherTab activeTab = LauncherTab.library; // track which tab is active
 
-  Future<void>  _loadInstances() async {
+  Future<void> _loadInstances() async {
+    unawaited(
+      VersionCache.fetchVersions(
+      loaderRepos: loaderRepos,
+      cacheDirPath: "${getPersistentCacheDir().path}/caches/versions",
+      onUpdate: (versions) {
+        if (context.mounted) {
+          setState(() {
+            InstanceManager().currentVersions = versions;
+          });
+        }
+      },
+    ));
     instances = await instanceManager.loadAllInstances();
     setState(() {}); // trigger UI update
 
-    // Trigger file download
     for (var instance in instances) {if (instance['downloaded'] != true) {
       if (!mounted) return;
       unawaited(_refreshInstance(context, instance));
@@ -102,6 +115,135 @@ class _LauncherHomeState extends State<LauncherHome> {
     await _loadInstances();
   }
 
+  String? getOtherCRLInstancesDir() {
+    if (Platform.isWindows) {return p.join(Platform.environment['USERPROFILE'] ?? '', 'Documents', 'Apps', 'CR Launcher', 'cosmic-reach', 'instances',);}
+    if (Platform.isMacOS) {return p.join(Platform.environment['HOME'] ?? '', 'Documents','Apps', 'CR Launcher', 'cosmic-reach', 'instances',);}
+    if (Platform.isLinux) {return p.join(Platform.environment['HOME'] ?? '', 'Documents', 'Apps', 'CR Launcher', 'cosmic-reach', 'instances',);}
+    return null;
+  }
+
+
+  Future<void> importFromLauncherRoot(BuildContext context) async {
+    final initialDir = getOtherCRLInstancesDir();
+
+    final resolvedInitialDir = initialDir != null && Directory(initialDir).existsSync() ? initialDir : null;
+
+    final result = await FilePicker.platform.getDirectoryPath(
+      dialogTitle: "Select instance folders",
+      lockParentWindow: true,
+      initialDirectory: resolvedInitialDir,
+    );
+
+    if (result == null) return;
+
+    final dir = Directory(result);
+    if (!await dir.exists()) return;
+
+    final discovered = <DiscoveredInstance>[];
+
+    for (final entry in dir.listSync(followLinks: false)) {
+      if (entry is! Directory) continue;
+
+      final instanceFile = File(p.join(entry.path, 'instance.json'));
+      if (!await instanceFile.exists()) continue;
+
+      try {
+        final json = jsonDecode(await instanceFile.readAsString());
+        discovered.add(
+          DiscoveredInstance(folder: entry, data: json as Map<String,dynamic>),
+        );
+      } catch (_) {
+      }
+    }
+
+    if (discovered.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("No instances found")),
+      );
+      return;
+    }
+
+    if (!context.mounted) return;
+    _showImportDialog(context, discovered);
+  }
+
+  void _showImportDialog(
+      BuildContext context,
+      List<DiscoveredInstance> instances,
+      ) {
+    showDialog<dynamic>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              title: const Text("Import Instances"),
+              content: SizedBox(
+                width: 420,
+                child: ListView(
+                  shrinkWrap: true,
+                  children: [
+                    for (final inst in instances)
+                      CheckboxListTile(
+                        value: inst.data['modLoader'] as String == 'quilt' ? false : inst.selected,
+                        onChanged: (v) =>
+                            setState(() => inst.selected = v ?? false),
+                        enabled: !(inst.data['modLoader'] as String == 'quilt'),
+                        title: Text(inst.data['name'] as String),
+                        subtitle: Text("Cosmic Reach Version ${inst.data['cosmicVersion'] as String}"),
+                      ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text("Cancel"),
+                ),
+                ElevatedButton(
+                  onPressed: () async {
+                    Navigator.pop(ctx);
+                    await _importSelected(instances);
+                  },
+                  child: const Text("Import Selected"),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _importSelected(
+      List<DiscoveredInstance> instances,
+      ) async {
+    final manager = InstanceManager();
+
+    for (final inst in instances.where((i) => i.selected).where((i) => i.data['modLoader'] != 'quilt')) {
+      final id = "${inst.data['name']}-${nanoid(5)}";
+      var dat = inst.data;
+
+      Map<String, dynamic> data = {
+        'uuid':id,
+        'downloaded':false,
+        'loader': ((dat['modLoader'] as String?) ?? 'Vanilla').capitalize(),
+        'version': "${dat['cosmicVersion'] ?? 'latest'}-alpha",
+        'name': dat['name'] ?? 'Imported',
+        'playtime': dat['totalPlaytime'] ?? 0
+      };
+      if (data['loader'] == 'Puzzle') {data.addAll({
+          'Core': dat['puzzleCoreVersion'] ?? 'latest',
+          'Cosmic': dat['puzzleCosmicVersion'] ?? 'latest'
+        });}
+
+
+
+      await manager.saveInstance(id, data);
+    }
+    await _loadInstances();
+  }
 
   //Loaders
   final loaderRepos = {
@@ -156,12 +298,10 @@ class _LauncherHomeState extends State<LauncherHome> {
       barrierDismissible: false,
       builder: (ctx) {
         bool onSubVersionPage = false;
-        Map<String, Map<String, List<Map<String, String>>>> currentVersions = {};
-        bool hasFetchedVersions = false; // track if fetch already started
+        bool hasFetchedVersions = false;
 
         return StatefulBuilder(
           builder: (context, setState) {
-            // start async fetch only once after first build
             if (!hasFetchedVersions) {
               hasFetchedVersions = true;
               WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -171,7 +311,7 @@ class _LauncherHomeState extends State<LauncherHome> {
                   onUpdate: (versions) {
                     if (context.mounted) {
                       setState(() {
-                        currentVersions = versions;
+                        InstanceManager().currentVersions = versions;
                       });
                     }
                   },
@@ -187,23 +327,23 @@ class _LauncherHomeState extends State<LauncherHome> {
               content: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: dialogWidth, maxHeight: dialogMaxHeight),
                 child: SingleChildScrollView(
-                  child: currentVersions.isEmpty
+                  child: InstanceManager().currentVersions.isEmpty
                       ? const Center(child: CircularProgressIndicator())
                       : Column(
                     mainAxisSize: MainAxisSize.min,
                     children: onSubVersionPage
                         ? [
-                      for (final modType in currentVersions[selectedLoader]?.keys ?? [])
+                      for (final modType in InstanceManager().currentVersions[selectedLoader]?.keys ?? [])
                         Padding(
                           padding: const EdgeInsets.only(bottom: 12),
                           child: buildDropdown(
                             label: "$modType Version",
-                            items: (currentVersions[selectedLoader]?[modType] ?? [])
+                            items: (InstanceManager().currentVersions[selectedLoader]?[modType] ?? [])
                                 .map((v) => v.keys.first)
                                 .toList(),
                             selected: selectedSubVersions[modType] ??
-                                ((currentVersions[selectedLoader]?[modType]?.isNotEmpty ?? false)
-                                    ? currentVersions[selectedLoader]![modType]!.first.keys.first
+                                ((InstanceManager().currentVersions[selectedLoader]?[modType]?.isNotEmpty ?? false)
+                                    ? InstanceManager().currentVersions[selectedLoader]![modType]!.first.keys.first
                                     : ""),
                             onChanged: (v) => setState(() => selectedSubVersions[modType as String] = v),
                           ),
@@ -219,7 +359,7 @@ class _LauncherHomeState extends State<LauncherHome> {
                       const SizedBox(height: 12),
                       buildDropdown(
                         label: "Game Version",
-                        items: (currentVersions['Vanilla']?['Client'] ?? [])
+                        items: (InstanceManager().currentVersions['Vanilla']?['Client'] ?? [])
                             .map((v) => v.keys.first)
                             .toList(),
                         selected: selectedVersion,
@@ -260,14 +400,10 @@ class _LauncherHomeState extends State<LauncherHome> {
                       "loader": selectedLoader,
                     };
 
-                    loaderInfo['version'] = resolveLatest(currentVersions, "Vanilla", "Client", loaderInfo['version'] as String);
-
                     if (selectedLoader == "Puzzle") {
                       loaderInfo.addEntries(selectedSubVersions.entries);
                       loaderInfo.addAll({"versions": "$versionInfo | ${selectedSubVersions.entries.map((e) => "${e.key}:${e.value}").join(", ")}"});
 
-                      loaderInfo['Core'] = resolveLatest(currentVersions, "Puzzle", "Core", loaderInfo['Core'] as String);
-                      loaderInfo['Cosmic'] = resolveLatest(currentVersions, "Puzzle", "Cosmic", loaderInfo['Cosmic'] as String);
                     } else {loaderInfo.addEntries(selectedSubVersions.entries);}
                     loaderInfo['downloaded'] = false;
                     navigator.pop(loaderInfo);
@@ -291,6 +427,9 @@ class _LauncherHomeState extends State<LauncherHome> {
       return;
     }
 
+    if (_checkVersionDownloaded(instance)) return;
+    if (instance['downloaded'] == false) unawaited(_refreshInstance(context, instance));
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text("Launching ${instance['name']}...")),
     );
@@ -306,45 +445,45 @@ class _LauncherHomeState extends State<LauncherHome> {
 
     List<String> args;
 
-    if (loader == 'Puzzle') {
-      final libDir = Directory("${getPersistentCacheDir().path}/puzzle_runtime/${instance['Core']}-${instance['Cosmic']}");
-      final sep = Platform.isWindows ? ';' : ':';
-      var jars = libDir
-          .listSync()
-          .whereType<File>()
-          .where((f) => f.path.endsWith('.jar'))
-          .map((f) => f.path)
-          .join(sep);
+    switch (loader) {
+      case 'Puzzle': {
+        final libDir = Directory("${getPersistentCacheDir().path}/puzzle_runtime/${resolveLatest('Puzzle  ', 'Core', instance['Core'] as String)}-${resolveLatest('Puzzle  ', 'Core', instance['Cosmic']as String)}");
+        if (!libDir.existsSync()) return;
+        final sep = Platform.isWindows ? ';' : ':';
+        var jars = libDir
+            .listSync()
+            .whereType<File>()
+            .where((f) => f.path.endsWith('.jar'))
+            .map((f) => f.path)
+            .join(sep);
 
-      jars += "$sep${getPersistentCacheDir().path}/cosmic_versions/cosmic-reach-client-${instance['version']}.jar";
+        jars += "$sep${getPersistentCacheDir().path}/cosmic_versions/cosmic-reach-client-${resolveLatest('Vanilla','Client', instance['version'] as String)}.jar";
 
-      final modFolderDir = Directory("${getPersistentCacheDir().path}/instances/${instance['uuid']}/");
-      await modFolderDir.create(recursive: true);
+        final modFolderDir = Directory("${getPersistentCacheDir().path}/instances/${instance['uuid']}/");
+        await modFolderDir.create(recursive: true);
 
-      args = [
-        '-Xms${minMem}m',
-        '-Xmx${maxMem}m',
-        '-cp', jars,
-        'dev.puzzleshq.puzzleloader.loader.launch.pieces.ClientPiece',
-        '--mod-folder=${modFolderDir.path}',
-      ];
-
-    } else if (loader == "Vanilla") {
-      args = [
-        '-Xms${minMem}m',
-        '-Xmx${maxMem}m',
-        '-jar',
-        "${getPersistentCacheDir().path}/cosmic_versions/cosmic-reach-client-${instance['version']}.jar",
-      ];
-    } else {
-      return;
+        args = [
+          '-Xms${minMem}m',
+          '-Xmx${maxMem}m',
+          '-cp', jars,
+          'dev.puzzleshq.puzzleloader.loader.launch.pieces.ClientPiece',
+          '--mod-folder=${modFolderDir.path}',
+        ];
+      }
+      case 'Vanilla': {
+        args = [
+          '-Xms${minMem}m',
+          '-Xmx${maxMem}m',
+          '-jar',
+          "${getPersistentCacheDir().path}/cosmic_versions/cosmic-reach-client-${resolveLatest('Vanilla','Client', instance['version'] as String)}.jar",
+        ];
+      }
+      default: return;
     }
 
     final env = <String, String>{};
     final key = await ItchSecureStore.loadKey();
-    if (key != null) {
-      env['ITCHIO_API_KEY'] = key;
-    }
+    env['ITCHIO_API_KEY'] = key??'';
     var raw = prefs.getValue<dynamic>('defaults_instance_vars').toString().split(',');
 
 
@@ -392,7 +531,6 @@ class _LauncherHomeState extends State<LauncherHome> {
   OverlayEntry? _activeOverlay;
   Widget _buildInstanceCard(BuildContext context, Map<String, dynamic> instance) {
     bool hovering = false;
-
 
     void showContextMenu(Offset position) {
       _activeOverlay?.remove();
@@ -481,7 +619,7 @@ class _LauncherHomeState extends State<LauncherHome> {
                         icon: Icons.folder_open,
                         label: "Open Folder",
                         onTap: () {
-                          revealFile(instanceManager.getInstanceFilePath(instance['uuid'] as String));
+                          instanceManager.getInstanceFilePath(instance['uuid'] as String).revealFile();
                           _activeOverlay?.remove();
                           _activeOverlay = null;
                         },
@@ -491,7 +629,7 @@ class _LauncherHomeState extends State<LauncherHome> {
                         icon: Icons.content_copy,
                         label: "Copy Path",
                         onTap: () {
-                          copyToClipboard(instanceManager.getInstanceFilePath(instance['uuid'] as String));
+                          instanceManager.getInstanceFilePath(instance['uuid'] as String).copyToClipboard();
                           _activeOverlay?.remove();
                           _activeOverlay = null;
                           ScaffoldMessenger.of(context).showSnackBar(
@@ -697,13 +835,13 @@ class _LauncherHomeState extends State<LauncherHome> {
 
     try {
       await downloadCosmicReachVersion(
-        instance['version']! as String,
+          (instance['version'] as String?) ?? 'latest'
       );
 
       if (instance['loader'] == 'Puzzle') {
         await downloadPuzzleVersion(
-          instance['Core']! as String,
-          instance['Cosmic']! as String,
+            (instance['Core'] as String?) ?? 'latest',
+            (instance['Cosmic'] as String?) ?? 'latest'
         );
       }
       if (!await instanceManager.instanceExists(instance['uuid'] as String)) return;
@@ -718,11 +856,28 @@ class _LauncherHomeState extends State<LauncherHome> {
           ),
         ),
       );
+      if (kDebugMode) {
+        print(e.toString());
+      }
     } finally {
       setState(() {
         instance['downloading'] = false;
       });
     }
+  }
+
+  bool _checkVersionDownloaded(Map<String, dynamic> instance) {
+    if (!File("${getPersistentCacheDir().path}/cosmic_versions/cosmic-reach-client-${instance['version']}.jar").existsSync()) {
+      _refreshInstance(context, instance);
+      return false;
+    }
+    if (instance['loader'] == 'Puzzle') {
+      if (!Directory("${getPersistentCacheDir().path}/puzzle_runtime/${instance['Core']}-${instance['Cosmic']}").existsSync()) {
+        _refreshInstance(context, instance);
+        return false;
+      }
+    }
+    return true;
   }
 
   void _confirmDelete(BuildContext context, Map<String, dynamic> instance) {
@@ -1377,8 +1532,10 @@ class _LauncherHomeState extends State<LauncherHome> {
     Future<List<Map<String, dynamic>>> getProcessedInstances() async {
       // Filter
       var filtered = instances.where((i) {
-        return i['name']!.toLowerCase().contains(searchQuery.toLowerCase()) as bool;
+        return (i['name']??'').toLowerCase().contains(searchQuery.toLowerCase()) as bool;
       }).toList();
+
+
 
       // Sort
       filtered.sort((a, b) {
@@ -1465,6 +1622,15 @@ class _LauncherHomeState extends State<LauncherHome> {
                   tooltip: "Create New Instance",
                   onPressed: _addInstance,
                 ),
+
+                //Import instance button
+                IconButton(
+                  iconSize: 32,
+                  icon: const Icon(Icons.drive_folder_upload),
+                  tooltip: "Import Instance",
+                  onPressed: () => importFromLauncherRoot(context),
+                ),
+
                 const Spacer(),
 
                 //Settings button
@@ -1837,3 +2003,14 @@ class _InstanceCenterIcon extends StatelessWidget {
   }
 }
 
+class DiscoveredInstance {
+  final Directory folder;
+  final Map<String, dynamic> data;
+  bool selected;
+
+  DiscoveredInstance({
+    required this.folder,
+    required this.data,
+    this.selected = true,
+  });
+}
