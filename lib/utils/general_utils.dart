@@ -4,23 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 
-Future<void> browseFolder(String? path) async {
-  final dir = Directory(path!);
-  if (!await dir.exists()) {
-    throw Exception('Directory does not exist: $path');
-  }
-
-  if (Platform.isWindows) {
-    await Process.start('explorer', [dir.path]);
-  } else if (Platform.isMacOS) {
-    await Process.start('open', [dir.path]);
-  } else if (Platform.isLinux) {
-    await Process.start('xdg-open', [dir.path]);
-  } else {
-    throw UnsupportedError('Unsupported platform: ${Platform.operatingSystem}');
-  }
-  return;
-}
+import 'os_utils.dart';
 
 extension StringExtension on String {
   String capitalize() {
@@ -33,13 +17,53 @@ extension StringExtension on String {
   }
 
   void revealFile() {
-    if (Platform.isWindows) {
-      Process.run('explorer', ['/select,', this]);
-    } else if (Platform.isMacOS) {
-      Process.run('open', ['-R', this]);
-    } else if (Platform.isLinux) {
-      Process.run('xdg-open', [Directory(this).parent.path]);
+    switch (Platform.operatingSystem) {
+      case OS.windows: Process.run('explorer', ['/select,', this]);
+      case OS.macos: Process.run('open', ['-R', this]);
+      case OS.linux: Process.run('xdg-open', [Directory(this).parent.path]);
     }
+  }
+
+  Future<void> browseFolder() async {
+    final dir = Directory(this);
+    if (!await dir.exists()) {
+      throw Exception('Directory does not exist: $this');
+    }
+
+    switch (Platform.operatingSystem) {
+      case OS.windows: await Process.start('explorer', [dir.path]);
+      case OS.macos: await Process.start('open', [dir.path]);
+
+      case OS.linux: {
+        var fileManager = await Process.run("xdg-mime", ["query", "default", "inode/directory"]);
+        switch (fileManager.stdout.toString()) {
+          case FileManager.kdeDolphin:
+            await Process.run('dolphin', ['--select', dir.path]);
+
+          case FileManager.gnomeNautilus:
+            await Process.run('nautilus', ['--select', dir.path]);
+
+          case FileManager.xfceThunar:
+            await Process.run('thunar', [dir.path]);
+
+          case FileManager.cinnamonNemo:
+            await Process.run('nemo', ['--no-desktop', dir.path]);
+
+          case FileManager.lxqtPcmanfm:
+            await Process.run('pcmanfm-qt', ['--select', dir.path]);
+
+          case FileManager.mateCaja:
+            await Process.run('caja', ['--select', dir.path]);
+
+          default:
+          // Fallback: open parent directory
+            await Process.run('xdg-open', [File(dir.path).parent.path]);
+        }
+      }
+      default: throw UnsupportedError('Unsupported platform: ${Platform.operatingSystem}');
+    }
+
+    return;
   }
 }
 

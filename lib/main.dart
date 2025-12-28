@@ -22,6 +22,8 @@ import 'package:polaris/utils/persistent_widgets.dart';
 import 'utils/version_cache.dart';
 
 const String title = "Polaris Launcher";
+const String installPath = "PolarisLauncher";
+
 final prefs = PersistentPrefs.open();
 
 void main() {
@@ -1000,15 +1002,7 @@ class _LauncherHomeState extends State<LauncherHome> {
         final TextEditingController javaVersionController = TextEditingController(text: '17');
         final TextEditingController downloadDirController = TextEditingController();
 
-        if (Platform.isWindows) {
-          downloadDirController.text = r'C:\Program Files\java';
-        } else if (Platform.isMacOS) {
-          downloadDirController.text = p.join(Platform.environment['HOME'] ?? '/', 'Library', 'Java');
-        } else if (Platform.isLinux) {
-          downloadDirController.text = p.join(Platform.environment['HOME'] ?? '/', '.local', 'share', 'java');
-        } else {
-          downloadDirController.text = Directory.current.path;
-        }
+        downloadDirController.text = p.join(getPersistentCacheDir().path, "java");
 
         OutlineInputBorder darkGreyBorder = const OutlineInputBorder(
           borderSide: BorderSide(color: Colors.grey, width: 1),
@@ -1238,15 +1232,15 @@ class _LauncherHomeState extends State<LauncherHome> {
                                                       }
 
                                                       final outDir = downloadDirController.text;
-                                                      final file = await TemurinDownloader.downloadLatest(
+                                                      final path = await TemurinDownloader.download(
                                                         version: version,
                                                         outDir: outDir,
                                                       );
 
-                                                      if (file != null && mounted) {
-                                                        if (kDebugMode) {print('[Info] Downloaded Java $version to ${file.path}');}
+                                                      if (path != null && mounted) {
+                                                        if (kDebugMode) {print('[Info] Downloaded Java $version to $path');}
                                                         ScaffoldMessenger.of(context).showSnackBar(
-                                                          SnackBar(content: Text('Downloaded Java $version to ${file.path}')),
+                                                          SnackBar(content: Text('Downloaded Java $version to $path')),
                                                         );
                                                       }
                                                     },
@@ -1276,7 +1270,7 @@ class _LauncherHomeState extends State<LauncherHome> {
                                                     icon: const Icon(Icons.folder_open),
                                                     onPressed: () async {
                                                       final folder = downloadDirController.text;
-                                                      await browseFolder(folder);
+                                                      await folder.browseFolder();
                                                       if (mounted) {
                                                         setState(() {
                                                           downloadDirController.text = folder;
@@ -1327,7 +1321,7 @@ class _LauncherHomeState extends State<LauncherHome> {
                                                         Row(
                                                           children: [
                                                             ElevatedButton.icon(
-                                                              onPressed: () => browseFolder(java['path']),
+                                                              onPressed: () => java['path']?.browseFolder(),
                                                               icon: const Icon(Icons.folder_open),
                                                               label: const Text("Browse"),
                                                             ),
@@ -1446,7 +1440,7 @@ class _LauncherHomeState extends State<LauncherHome> {
                                                 ),
                                               ),
                                               IconButton(icon: const Icon(Icons.folder_open), onPressed: () {
-                                                browseFolder(appDirController.text);
+                                                appDirController.text.browseFolder();
                                                 }),
                                             ],
                                           ),

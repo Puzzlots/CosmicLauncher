@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 
+import 'cache_utils.dart';
+
 Future<List<Map<String, String>>> detectJavaInstallations() async {
   final javaPaths = <String>{};
 
@@ -67,6 +69,8 @@ Future<List<Map<String, String>>> detectJavaInstallations() async {
   } else if (Platform.isMacOS) {
     standardDirs.add('/Library/Java/JavaVirtualMachines');
   }
+
+  standardDirs.add("${getPersistentCacheDir().path}/java");
 
   for (final path in standardDirs) {
     final dir = Directory(path);

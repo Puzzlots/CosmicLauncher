@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:archive/archive_io.dart';
 import 'package:http/http.dart' as http;
+import 'package:path/path.dart' as p;
 
 class TemurinDownloader {
   static Future<File?> downloadLatest({
@@ -40,18 +42,19 @@ class TemurinDownloader {
     final file = await downloadLatest(version: version, outDir: outDir);
     if (file == null) return null;
 
-    final extractDir =
-        '${file.parent.path}/${file.uri.pathSegments.last.replaceAll(RegExp(r'(\.zip|\.tar\.gz)$'), '')}';
-
-    Directory(extractDir).createSync(recursive: true);
+    Directory(outDir!).createSync(recursive: true);
 
     if (file.path.endsWith('.zip')) {
-      await _extractZip(file, extractDir);
+      await _extractZip(file, outDir);
     } else if (file.path.endsWith('.tar.gz')) {
-      await _extractTarGz(file, extractDir);
+      await _extractTarGz(file, outDir);
     }
 
-    return extractDir;
+    file.deleteSync();
+
+    unawaited(_makeExecutable(Directory(outDir)));
+
+    return outDir;
   }
 
   // -------- OS / ARCH DETECTION --------
@@ -96,5 +99,17 @@ class TemurinDownloader {
     if (cd == null) return null;
     if (!cd.contains('filename=')) return null;
     return cd.split('filename=').last.replaceAll('"', '');
+  }
+
+  static Future<void> _makeExecutable(Directory out) async {
+    if (Platform.isWindows) return;
+
+    for (final dir in out.listSync()) {
+      String javaExecutable = p.join(dir.path, "bin", "java");
+      var javaFile = File(javaExecutable);
+      if (await javaFile.exists()){
+        unawaited(Process.run("chmod", ["+x", javaFile.path]));
+      }
+    }
   }
 }

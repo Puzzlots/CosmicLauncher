@@ -9,7 +9,7 @@ import 'cache_utils.dart';
 
 class InstanceManager {
   static final InstanceManager _instance =
-  InstanceManager._internal(appName: title);
+  InstanceManager._internal(appName: installPath);
 
   factory InstanceManager() => _instance;
 
