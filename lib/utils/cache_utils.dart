@@ -6,7 +6,7 @@ import 'package:path/path.dart' as p;
 
 import '../main.dart';
 
-Directory getPersistentCacheDir({String appName = installPath}) {
+Directory getPersistentCacheDir({String installPath = installPath}) {
   late final String base;
 
   if (Platform.isWindows) {
@@ -25,22 +25,21 @@ Directory getPersistentCacheDir({String appName = installPath}) {
     base = Directory.current.path;
   }
 
-  final dir = Directory(p.join(base, appName));
+  final dir = Directory(p.join(base, installPath));
 
   if (!dir.existsSync()) {
+    final oldDir = Directory(p.join(base, "Polaris Launcher"));
+    if (oldDir.existsSync()){
+      oldDir.renameSync(dir.path);
+    }
     dir.createSync(recursive: true);
-  }
-
-  final oldDir = Directory(p.join(base, "Polaris Launcher"));
-  if (oldDir.existsSync()){
-    oldDir.renameSync(dir.path);
   }
 
   return dir;
 }
 
-Future<void> deleteCaches({String folder = 'caches', String appName = installPath}) async {
-  final baseDir = getPersistentCacheDir(appName: appName);
+Future<void> deleteCaches({String folder = 'caches', String installPath = installPath}) async {
+  final baseDir = getPersistentCacheDir(installPath: installPath);
   final cacheDir = Directory(p.join(baseDir.path, folder));
 
   if (await cacheDir.exists()) {
@@ -66,8 +65,8 @@ class PersistentPrefs {
 
   PersistentPrefs._(this._file, this._cache);
 
-  static Future<PersistentPrefs> open({String appName = installPath, String fileName = 'prefs.json'}) async {
-    final dir = getPersistentCacheDir(appName: appName);
+  static Future<PersistentPrefs> open({String installPath = installPath, String fileName = 'prefs.json'}) async {
+    final dir = getPersistentCacheDir(installPath: installPath);
     final file = File(p.join(dir.path, 'caches', fileName));
     if (!await file.exists()) await file.create(recursive: true);
 

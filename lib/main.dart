@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:nanoid/nanoid.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path/path.dart' as p;
+import 'package:polaris/tabs/add_content.dart';
 import 'package:polaris/utils/cache_utils.dart';
 import 'package:polaris/utils/credentials.dart';
 import 'package:polaris/utils/downloaders/cosmic_downloader.dart';
@@ -23,6 +24,8 @@ import 'utils/version_cache.dart';
 
 const String title = "Polaris Launcher";
 const String installPath = "PolarisLauncher";
+
+const Color backgroundColour = Color(0xFF1E1E1E);
 
 final prefs = PersistentPrefs.open();
 
@@ -51,7 +54,7 @@ class CosmicReachLauncher extends StatelessWidget {
   }
 }
 
-enum LauncherTab { library, skins }
+enum LauncherTab { library, skins, addContent }
 
 class LauncherHome extends StatefulWidget {
   const LauncherHome({super.key});
@@ -69,6 +72,8 @@ class _LauncherHomeState extends State<LauncherHome> {
     final info = await PackageInfo.fromPlatform();
     return info.version;
   }
+
+  Map<String, dynamic>? selectedInstance;
 
   LauncherTab activeTab = LauncherTab.library; // track which tab is active
 
@@ -238,7 +243,7 @@ class _LauncherHomeState extends State<LauncherHome> {
       if (data['loader'] == 'Puzzle') {data.addAll({
           'Core': dat['puzzleCoreVersion'] ?? 'latest',
           'Cosmic': dat['puzzleCosmicVersion'] ?? 'latest'
-        });}
+      });}
 
 
 
@@ -290,7 +295,9 @@ class _LauncherHomeState extends State<LauncherHome> {
         },
         popupProps: const PopupProps.menu(showSearchBox: true),
         decoratorProps: DropDownDecoratorProps(
-          decoration: InputDecoration(labelText: label),
+          decoration: InputDecoration(
+              labelText: label
+          ),
         ),
       );
     }
@@ -376,7 +383,9 @@ class _LauncherHomeState extends State<LauncherHome> {
                         onChanged: (value) {
                           if (value != null) setState(() => selectedLoader = value);
                         },
+                        borderRadius: BorderRadius.circular(12),
                         decoration: const InputDecoration(labelText: "Loader"),
+                        dropdownColor: backgroundColour,
                       ),
                     ],
                   ),
@@ -429,7 +438,7 @@ class _LauncherHomeState extends State<LauncherHome> {
       return;
     }
 
-    if (_checkVersionDownloaded(instance)) return;
+    if (!_checkVersionDownloaded(instance)) return;
     if (instance['downloaded'] == false) unawaited(_refreshInstance(context, instance));
 
     ScaffoldMessenger.of(context).showSnackBar(
@@ -450,7 +459,12 @@ class _LauncherHomeState extends State<LauncherHome> {
     switch (loader) {
       case 'Puzzle': {
         final libDir = Directory("${getPersistentCacheDir().path}/puzzle_runtime/${resolveLatest('Puzzle  ', 'Core', instance['Core'] as String)}-${resolveLatest('Puzzle  ', 'Core', instance['Cosmic']as String)}");
-        if (!libDir.existsSync()) return;
+        if (!libDir.existsSync()) {
+          if (kDebugMode) {
+            print("Folder does not exist");
+          }
+          return;
+        };
         final sep = Platform.isWindows ? ';' : ':';
         var jars = libDir
             .listSync()
@@ -478,6 +492,7 @@ class _LauncherHomeState extends State<LauncherHome> {
           '-Xmx${maxMem}m',
           '-jar',
           "${getPersistentCacheDir().path}/cosmic_versions/cosmic-reach-client-${resolveLatest('Vanilla','Client', instance['version'] as String)}.jar",
+          '-s "${getPersistentCacheDir().path}/instances/${instance['uuid'] as String}"'
         ];
       }
       default: return;
@@ -599,7 +614,11 @@ class _LauncherHomeState extends State<LauncherHome> {
                         onTap: () {
                           _activeOverlay?.remove();
                           _activeOverlay = null;
-                          // TODO
+
+                          setState(() {
+                            selectedInstance = instance;
+                            activeTab = LauncherTab.addContent;
+                          });
                         },
                       ),
                       _contextDivider(),
@@ -699,8 +718,8 @@ class _LauncherHomeState extends State<LauncherHome> {
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(
                       color: hovering
-                          ? Theme.of(context).colorScheme.secondary
-                          : Colors.white24,
+                          ? instance['downloading'] as bool? ?? false ? Colors.blue.withValues(alpha: 0.2) : Theme.of(context).colorScheme.secondary
+                          : Colors.transparent,
                     ),
                   ),
                   padding: const EdgeInsets.all(12),
@@ -1705,146 +1724,170 @@ class _LauncherHomeState extends State<LauncherHome> {
                       Container(width: 1, color: Colors.white24),
                       Expanded(
                         child: Container(
-                          padding: const EdgeInsets.all(16),
-                          decoration: const BoxDecoration(
-                            color: Color(0xFF121212),
-                            borderRadius: BorderRadius.only(topLeft: Radius.circular(12)),
-                          ),
-                          child: activeTab == LauncherTab.library
-                              ? StatefulBuilder(
-                            builder: (context, setInner) {
-                              return Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    children: [
-                                      Expanded(
-                                        child: TextField(
-                                          decoration: InputDecoration(
-                                            hintText: "Search instances...",
-                                            prefixIcon: const Icon(Icons.search),
-                                            border: OutlineInputBorder(
-                                              borderRadius: BorderRadius.circular(8),
-                                            ),
-                                            isDense: true,
-                                            filled: true,
-                                            fillColor: const Color(0xFF1E1E1E),
-                                          ),
-                                          onChanged: (val) {
-                                            setInner(() => searchQuery = val);
-                                          },
-                                        ),
-                                      ),
-                                      const SizedBox(width: 12),
-                                      DropdownButton<String>(
-                                        value: sortBy,
-                                        items: const [
-                                          "Name",
-                                          "Game Version",
-                                          "Loader"
-                                        ].map((e) => DropdownMenuItem(value: e, child: Text("Sort: $e"))).toList(),
-                                        onChanged: (v) => setInner(() => sortBy = v!),
-                                      ),
-                                      const SizedBox(width: 8),
-                                      DropdownButton<String>(
-                                        value: groupBy,
-                                        items: const [
-                                          "None",
-                                          "Loader",
-                                          "Game Version"
-                                        ].map((e) => DropdownMenuItem(value: e, child: Text("Group: $e"))).toList(),
-                                        onChanged: (v) => setInner(() => groupBy = v!),
-                                      ),
-                                    ],
-                                ),
-                                const SizedBox(height: 16),
-
-                                // Grid
-                                  Expanded(
-                                    child: FutureBuilder<List<Map<String, dynamic>>>(
-                                      future: getProcessedInstances(),
-                                      builder: (context, snapshot) {
-                                        if (snapshot.connectionState != ConnectionState.done) {
-                                          return const Center(child: CircularProgressIndicator());
-                                        }
-                                        if (snapshot.hasError) {
-                                          return Center(child: Text('Error: ${snapshot.error}'));
-                                        }
-                                        final list = snapshot.data ?? <Map<String, String>>[];
-
-                                        if (groupBy == 'None') {
-                                          // Simple grid when not grouped
-                                          return GridView.builder(
-                                            itemCount: list.length,
-                                            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                                              crossAxisCount: 3,
-                                              mainAxisSpacing: 12,
-                                              crossAxisSpacing: 12,
-                                              childAspectRatio: 1.4,
-                                            ),
-                                            itemBuilder: (context, index) {
-                                              final instance = list[index];
-                                              return _buildInstanceCard(context, instance);
-                                            },
-                                          );
-                                        }
-
-                                        // Grouped view
-                                        final grouped = <String, List<Map<String, dynamic>>>{};
-                                        for (var inst in list) {
-                                          final key = groupBy == 'Loader' ? inst['loader']! : inst['version']!;
-                                          grouped.putIfAbsent(key as String, () => []).add(inst);
-                                        }
-
-                                        return ListView(
-                                          children: grouped.entries.map((entry) {
-                                            return Column(
-                                              crossAxisAlignment: CrossAxisAlignment.start,
-                                              children: [
-                                                Padding(
-                                                  padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-                                                  child: Text(
-                                                    entry.key,
-                                                    style: const TextStyle(
-                                                      fontSize: 18,
-                                                      fontWeight: FontWeight.bold,
-                                                      color: Colors.white70,
+                            padding: const EdgeInsets.all(16),
+                            decoration: const BoxDecoration(
+                              color: Color(0xFF121212),
+                              borderRadius: BorderRadius.only(topLeft: Radius.circular(12)),
+                            ),
+                            child:
+                            Builder(
+                                builder: (context) {
+                                  switch (activeTab) {
+                                    case LauncherTab.library:
+                                      return StatefulBuilder(
+                                        builder: (context, setInner) {
+                                          return Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Row(
+                                                children: [
+                                                  Expanded(
+                                                    child: TextField(
+                                                      decoration: InputDecoration(
+                                                        hintText: "Search instances...",
+                                                        prefixIcon: const Icon(Icons.search),
+                                                        border: OutlineInputBorder(
+                                                            borderRadius: BorderRadius.circular(8),
+                                                            borderSide: BorderSide.none
+                                                        ),
+                                                        isDense: true,
+                                                        filled: true,
+                                                        fillColor: const Color(0xFF1E1E1E),
+                                                      ),
+                                                      onChanged: (val) {
+                                                        setInner(() => searchQuery = val);
+                                                      },
                                                     ),
                                                   ),
-                                                ),
-                                                GridView.builder(
-                                                  shrinkWrap: true,
-                                                  physics: const NeverScrollableScrollPhysics(),
-                                                  itemCount: entry.value.length,
-                                                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                                                    crossAxisCount: 3,
-                                                    mainAxisSpacing: 12,
-                                                    crossAxisSpacing: 12,
-                                                    childAspectRatio: 1.4,
+                                                  const SizedBox(width: 12),
+                                                  DropdownButton<String>(
+                                                      value: sortBy,
+                                                      items: [
+                                                        "Name",
+                                                        "Game Version",
+                                                        "Loader"
+                                                      ].map((e) => DropdownMenuItem(value: e, child: Text("Sort: $e"))).toList(),
+                                                      onChanged: (v) => setInner(() => sortBy = v!),
+                                                      borderRadius: BorderRadius.circular(12),
+                                                      dropdownColor: backgroundColour
                                                   ),
-                                                  itemBuilder: (context, index) {
-                                                    final instance = entry.value[index];
-                                                    return _buildInstanceCard(context, instance);
+                                                  const SizedBox(width: 8),
+                                                  DropdownButton<String>(
+                                                      value: groupBy,
+                                                      items: const [
+                                                        "None",
+                                                        "Loader",
+                                                        "Game Version"
+                                                      ].map((e) => DropdownMenuItem(value: e, child: Text("Group: $e"))).toList(),
+                                                      onChanged: (v) => setInner(() => groupBy = v!),
+                                                      borderRadius: BorderRadius.circular(12),
+                                                      dropdownColor: backgroundColour
+                                                  ),
+                                                ],
+                                              ),
+                                              const SizedBox(height: 16),
+
+                                              // Grid
+                                              Expanded(
+                                                child: FutureBuilder<List<Map<String, dynamic>>>(
+                                                  future: getProcessedInstances(),
+                                                  builder: (context, snapshot) {
+                                                    if (snapshot.connectionState != ConnectionState.done) {
+                                                      return const Center(child: CircularProgressIndicator());
+                                                    }
+                                                    if (snapshot.hasError) {
+                                                      return Center(child: Text('Error: ${snapshot.error}'));
+                                                    }
+                                                    final list = snapshot.data ?? <Map<String, String>>[];
+
+                                                    if (groupBy == 'None') {
+                                                      // Simple grid when not grouped
+                                                      return GridView.builder(
+                                                        itemCount: list.length,
+                                                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                                                          crossAxisCount: 3,
+                                                          mainAxisSpacing: 12,
+                                                          crossAxisSpacing: 12,
+                                                          childAspectRatio: 1.4,
+                                                        ),
+                                                        itemBuilder: (context, index) {
+                                                          final instance = list[index];
+                                                          return _buildInstanceCard(context, instance);
+                                                        },
+                                                      );
+                                                    }
+
+                                                    // Grouped view
+                                                    final grouped = <String, List<Map<String, dynamic>>>{};
+                                                    for (var inst in list) {
+                                                      final key = groupBy == 'Loader' ? inst['loader']! : inst['version']!;
+                                                      grouped.putIfAbsent(key as String, () => []).add(inst);
+                                                    }
+
+                                                    return ListView(
+                                                      children: grouped.entries.map((entry) {
+                                                        return Column(
+                                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                                          children: [
+                                                            Padding(
+                                                              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                                                              child: Text(
+                                                                entry.key,
+                                                                style: const TextStyle(
+                                                                  fontSize: 18,
+                                                                  fontWeight: FontWeight.bold,
+                                                                  color: Colors.white70,
+                                                                ),
+                                                              ),
+                                                            ),
+                                                            GridView.builder(
+                                                              shrinkWrap: true,
+                                                              physics: const NeverScrollableScrollPhysics(),
+                                                              itemCount: entry.value.length,
+                                                              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                                                                crossAxisCount: 3,
+                                                                mainAxisSpacing: 12,
+                                                                crossAxisSpacing: 12,
+                                                                childAspectRatio: 1.4,
+                                                              ),
+                                                              itemBuilder: (context, index) {
+                                                                final instance = entry.value[index];
+                                                                return _buildInstanceCard(context, instance);
+                                                              },
+                                                            ),
+                                                          ],
+                                                        );
+                                                      }).toList(),
+                                                    );
                                                   },
                                                 ),
-                                              ],
-                                            );
-                                          }).toList(),
-                                        );
-                                      },
-                                    ),
-                                  ),
-                                ],
-                              );
-                            },
-                          )
-                              : Center(
-                            child: Text(
-                              "Skins tab\n\nComing soon...",
-                              style:
-                              Theme.of(context).textTheme.titleMedium,
-                            ),
-                          ),
+                                              ),
+                                            ],
+                                          );
+                                        },
+                                      );
+
+                                    case LauncherTab.skins:
+                                      return Center(
+                                          child: Text(
+                                            "Skins tab\n\nComing soon...",
+                                            style:
+                                            Theme.of(context).textTheme.titleMedium,
+                                          )
+                                      );
+
+                                    case LauncherTab.addContent:
+                                      return AddContentTab(
+                                        instance: selectedInstance!,
+                                        onBack: () {
+                                          setState(() {
+                                            activeTab = LauncherTab.library; // switch back to library tab
+                                          });
+                                        },
+                                      );
+                                  }
+                                }
+                            )
                         ),
                       ),
                     ],

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:polaris/main.dart' show title, installPath;
 
 import '../main.dart' show title; // default app title
 import 'cache_utils.dart'; // your PersistentPrefs
@@ -34,7 +35,7 @@ class _PersistentCheckboxState extends State<PersistentCheckbox> {
   }
 
   Future<void> _initPrefs() async {
-    _prefs = await PersistentPrefs.open(appName: widget.appName);
+    _prefs = await PersistentPrefs.open(installPath: installPath);
     final saved = _prefs.getValue(widget.keyName, defaultValue: widget.value ?? false);
     setState(() {
       _value = saved;
@@ -90,7 +91,7 @@ class _PersistentSwitchState extends State<PersistentSwitch> {
   }
 
   Future<void> _initPrefs() async {
-    _prefs = await PersistentPrefs.open(appName: widget.appName);
+    _prefs = await PersistentPrefs.open(installPath: installPath);
     final saved = _prefs.getValue(widget.keyName, defaultValue: widget.value ?? false);
     setState(() {
       _value = saved;
@@ -153,7 +154,7 @@ class _PersistentSliderState extends State<PersistentSlider> {
   }
 
   Future<void> _initPrefs() async {
-    _prefs = await PersistentPrefs.open(appName: widget.appName);
+    _prefs = await PersistentPrefs.open(installPath: installPath);
     final saved = _prefs.getValue(widget.keyName, defaultValue: widget.value ?? widget.min);
     setState(() {
       _value = saved;
@@ -215,7 +216,7 @@ class _PersistentNumericFieldState extends State<PersistentNumericField> {
   }
 
   Future<void> _initPrefs() async {
-    _prefs = await PersistentPrefs.open(appName: widget.appName);
+    _prefs = await PersistentPrefs.open(installPath: installPath);
 
     final initial = widget.allowDouble
         ? _prefs.getValue(widget.keyName, defaultValue: widget.value?.toDouble() ?? 0.0).toString()
@@ -288,7 +289,7 @@ class _PersistentTextFieldState extends State<PersistentTextField> {
   }
 
   Future<void> _initPrefs() async {
-    _prefs = await PersistentPrefs.open(appName: widget.appName);
+    _prefs = await PersistentPrefs.open(installPath: installPath);
     final saved = _prefs.getValue(widget.keyName, defaultValue: _controller.text);
     if (_controller.text.isEmpty) _controller.text = saved;
 

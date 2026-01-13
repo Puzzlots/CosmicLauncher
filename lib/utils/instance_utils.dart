@@ -9,18 +9,18 @@ import 'cache_utils.dart';
 
 class InstanceManager {
   static final InstanceManager _instance =
-  InstanceManager._internal(appName: installPath);
+  InstanceManager._internal(baseDir: installPath);
 
   factory InstanceManager() => _instance;
 
-  InstanceManager._internal({required this.appName});
+  InstanceManager._internal({required this.baseDir});
 
-  final String appName;
+  final String baseDir;
 
   Map<String, Map<String, List<Map<String, String>>>> currentVersions = {};
 
   Directory get _instancesDir {
-    final dir = Directory(p.join(getPersistentCacheDir(appName: appName).path, 'instances'));
+    final dir = Directory(p.join(getPersistentCacheDir(installPath: baseDir).path, 'instances'));
     if (!dir.existsSync()) dir.createSync(recursive: true);
     return dir;
   }
