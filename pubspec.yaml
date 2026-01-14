@@ -29,6 +29,7 @@ dependencies:
   flutter_secure_storage: ^10.0.0
   package_info_plus: ^9.0.0
   file_picker: ^10.3.8
+  mime: ^2.0.0
 
 dev_dependencies:
   analysis_defaults:

@@ -12,6 +12,7 @@ import 'package:path/path.dart' as p;
 import 'package:polaris/tabs/add_content.dart';
 import 'package:polaris/utils/cache_utils.dart';
 import 'package:polaris/utils/credentials.dart';
+import 'package:polaris/utils/crmm/crmm_service.dart';
 import 'package:polaris/utils/downloaders/cosmic_downloader.dart';
 import 'package:polaris/utils/downloaders/puzzle_downloader.dart';
 import 'package:polaris/utils/downloaders/temurin_downloader.dart';
@@ -475,7 +476,7 @@ class _LauncherHomeState extends State<LauncherHome> {
 
         jars += "$sep${getPersistentCacheDir().path}/cosmic_versions/cosmic-reach-client-${resolveLatest('Vanilla','Client', instance['version'] as String)}.jar";
 
-        final modFolderDir = Directory("${getPersistentCacheDir().path}/instances/${instance['uuid']}/");
+        final modFolderDir = Directory("${getPersistentCacheDir().path}/instances/${instance['uuid']}/${CrmmService.javaModDir}");
         await modFolderDir.create(recursive: true);
 
         args = [
@@ -520,6 +521,7 @@ class _LauncherHomeState extends State<LauncherHome> {
 
     try {
       final startTime = DateTime.now().toUtc();
+      //TODO make this use the selected java
       final process = await Process.start(
         'java',
         args,
@@ -888,12 +890,12 @@ class _LauncherHomeState extends State<LauncherHome> {
   }
 
   bool _checkVersionDownloaded(Map<String, dynamic> instance) {
-    if (!File("${getPersistentCacheDir().path}/cosmic_versions/cosmic-reach-client-${instance['version']}.jar").existsSync()) {
+    if (!File("${getPersistentCacheDir().path}/cosmic_versions/cosmic-reach-client-${resolveLatest("Vanilla","Client", instance['version'] as String)}.jar").existsSync()) {
       _refreshInstance(context, instance);
       return false;
     }
     if (instance['loader'] == 'Puzzle') {
-      if (!Directory("${getPersistentCacheDir().path}/puzzle_runtime/${instance['Core']}-${instance['Cosmic']}").existsSync()) {
+      if (!Directory("${getPersistentCacheDir().path}/puzzle_runtime/${resolveLatest("Puzzle", "Core",instance['Core'] as String)}-${resolveLatest("Puzzle", "Cosmic", instance['Cosmic'] as String)}").existsSync()) {
         _refreshInstance(context, instance);
         return false;
       }

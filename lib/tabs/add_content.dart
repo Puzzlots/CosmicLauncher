@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:polaris/utils/general_utils.dart';
+import 'package:polaris/utils/version_cache.dart';
 
 import '../main.dart';
 import '../utils/cache_utils.dart';
@@ -194,7 +195,7 @@ class _AddContentTabState extends State<AddContentTab> with SingleTickerProvider
           const SizedBox(width: 5),
           IconCheckbox(
             value: locked,
-            label: widget.instance['version'] as String? ?? 'Version',
+            label: resolveLatest("Vanilla", "Client", widget.instance['version'] as String),
             backgroundColour: backgroundColour,
             onChanged: (v) => setState(() => locked = v),
           )]

@@ -1,13 +1,20 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:archive/archive.dart';
+import 'package:archive/archive_io.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:mime/mime.dart';
 import 'package:path/path.dart' as p;
 import 'package:polaris/utils/crmm/crmm_project.dart';
 
 
 class CrmmService {
+  static final dataModDir = "mods";
+  static final javaModDir = "jmods";
+
   static Future<List<CrmmProject>> searchProjects(String query, String type, String gameVersion, String sortBy, bool versionLocked) async {
     if (kDebugMode) {
       print("Searching for $query as $type ${versionLocked ? "on Cosmic Reach version $gameVersion" : ''}");
@@ -91,9 +98,16 @@ class CrmmService {
       final file = File(p.join(path, fileName));
 
       await file.parent.create(recursive: true);
-
-      // Write file
       await file.writeAsBytes(response.bodyBytes);
+
+      if (type == 'mod'){
+        final outputDir = Directory(p.join(file.parent.path, javaModDir));
+        await outputDir.create(recursive: true);
+        unawaited(file.rename(p.join(outputDir.path, file.path.split("/").last))); // i mean like the puzzle thing needs to be updated now because its looking in the wrong place?
+      } else {
+        await unzipDataMod(file);
+        unawaited(file.delete());
+      }
 
       if (kDebugMode) {
         print('Downloaded to: ${file.path}');
@@ -105,6 +119,26 @@ class CrmmService {
       }
       rethrow;
     }
+  }
+
+  static Future<void> unzipDataMod(File inputFile) async {
+    if (kDebugMode) {
+      print("Unpacking ${inputFile.path} \n to parent ${inputFile.parent.toString()}/$dataModDir");
+    }
+    
+    if (lookupMimeType(inputFile.path) != "application/zip") return;
+
+    final fileStream = InputFileStream(inputFile.path);
+    final archive = ZipDecoder().decodeStream(fileStream);
+
+    final outputDir = Directory(p.join(inputFile.parent.path, dataModDir));
+    await outputDir.create(recursive: true);
+
+    if (kDebugMode) print("Extracting to: ${outputDir.path}");
+
+    await extractArchiveToDisk(archive, outputDir.path);
+
+    if (kDebugMode) print("Extraction complete.");
   }
 
   static List<String> sortBy = [

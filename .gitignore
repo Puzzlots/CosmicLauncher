@@ -48,3 +48,7 @@ app.*.map.json
 
 installer.nsi
 /portable.evb
+
+/packing
+/scripts/AppDir
+polaris_launcher.png

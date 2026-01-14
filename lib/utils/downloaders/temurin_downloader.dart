@@ -80,8 +80,8 @@ class TemurinDownloader {
   // -------- EXTRACTION --------
 
   static Future<void> _extractZip(File zipFile, String outDir) async {
-    final bytes = await zipFile.readAsBytes();
-    final archive = ZipDecoder().decodeBytes(bytes);
+    final fileStream = InputFileStream(zipFile.path);
+    final archive = ZipDecoder().decodeStream(fileStream);
     await extractArchiveToDisk(archive, outDir);
   }
 
