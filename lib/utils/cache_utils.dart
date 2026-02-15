@@ -45,14 +45,14 @@ Future<void> deleteCaches({String folder = 'caches', String installPath = instal
   if (await cacheDir.exists()) {
     try {
       await cacheDir.delete(recursive: true);
-      if (kDebugMode) {
+      if (kDebugMode || verbose) {
         print('Deleted cache directory: ${cacheDir.path}');
       }
     } catch (e) {
       stderr.writeln('Failed to delete cache directory: $e');
     }
   } else {
-    if (kDebugMode) {
+    if (kDebugMode || verbose) {
       print('No cache directory found at ${cacheDir.path}');
     }
   }

@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 
+import '../main.dart';
 import 'os_utils.dart';
 
 extension StringExtension on String {
@@ -74,7 +75,7 @@ Future<bool> findAndCopyFile({
 }) async {
   await for (final entity in searchDir.list(recursive: true)) {
     if (entity is File && p.basename(entity.path) == fileName) {
-      if (kDebugMode) {
+      if (kDebugMode || verbose) {
         print('Copying $fileName to ${destinationDir.path} from ${entity.path}');
       }
       await destinationDir.create(recursive: true);

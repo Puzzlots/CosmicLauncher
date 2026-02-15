@@ -6,6 +6,8 @@ import 'package:polaris/utils/cache_utils.dart';
 import 'package:polaris/utils/general_utils.dart';
 import 'package:polaris/utils/version_cache.dart';
 
+import '../../main.dart';
+
 Future<void> downloadPuzzleVersion(
     String coreVersion,
     String cosmicVersion
@@ -70,7 +72,7 @@ Future<void> downloadPuzzleVersion(
     }
 
     if (!downloaded) {
-      if (kDebugMode) {
+      if (kDebugMode || verbose) {
         print("[Exception] failed to download $group:$artifact:$version");
       } else {
         throw Exception("failed to download $group:$artifact:$version");
@@ -93,7 +95,7 @@ Future<void> downloadJars(List<List<String>> files, Directory libDir) async {
     final url = pair[1];
     final file = File("${libDir.path}/$fileName");
     if (await file.exists()) continue;
-    if (kDebugMode) {
+    if (kDebugMode || verbose) {
       print("Downloading $url");
 
     } await tryDownload(url, file);
@@ -108,7 +110,7 @@ Future<bool> tryDownload(String url, File target) async {
       return true;
     }
   } catch (e) {
-    if (kDebugMode) {
+    if (kDebugMode || verbose) {
       print("[Exception] download error: $e");
     }
   }

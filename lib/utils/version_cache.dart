@@ -155,7 +155,7 @@ String resolveLatest(String loader, String modType, String? version) {
 
   final list = InstanceManager().currentVersions[loader]?[modType];
   if (list == null || list.isEmpty) {
-    throw StateError("No versions available for $loader/$modType");
+    throw StateError("No versions available for $loader/$modType at $version");
   }
 
   return (list.length > 1 ? list[1] : list.first).keys.first;

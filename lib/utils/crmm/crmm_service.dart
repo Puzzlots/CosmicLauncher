@@ -10,13 +10,15 @@ import 'package:mime/mime.dart';
 import 'package:path/path.dart' as p;
 import 'package:polaris/utils/crmm/crmm_project.dart';
 
+import '../../main.dart';
+
 
 class CrmmService {
   static final dataModDir = "mods";
   static final javaModDir = "jmods";
 
   static Future<List<CrmmProject>> searchProjects(String query, String type, String gameVersion, String sortBy, bool versionLocked) async {
-    if (kDebugMode) {
+    if (kDebugMode || verbose) {
       print("Searching for $query as $type ${versionLocked ? "on Cosmic Reach version $gameVersion" : ''}");
     }
     final url = Uri.https('api.crmm.tech', '/api/search',
@@ -28,7 +30,7 @@ class CrmmService {
           if (versionLocked) 'v': gameVersion
         }
     );
-    if (kDebugMode) {
+    if (kDebugMode || verbose) {
       print(url);
     }
 
@@ -47,12 +49,12 @@ class CrmmService {
 
         return projects;
       } else {
-        if (kDebugMode) {
+        if (kDebugMode || verbose) {
           print("Error fetching CRMM projects ${response.statusCode}");
         }
       }
     } catch (e) {
-      if (kDebugMode) {
+      if (kDebugMode || verbose) {
         print(e);
       }
     }
@@ -69,11 +71,11 @@ class CrmmService {
         }
     );
 
-    if (kDebugMode) {
+    if (kDebugMode || verbose) {
       print(url);
     }
 
-    if (kDebugMode) {
+    if (kDebugMode || verbose) {
       print('Downloading from: $url');
     }
 
@@ -112,7 +114,7 @@ class CrmmService {
 
 
     } catch (e, stack) {
-      if (kDebugMode) {
+      if (kDebugMode || verbose) {
         print('Download failed: $e');
         print(stack);
       }
@@ -122,7 +124,7 @@ class CrmmService {
 
 
   static Future<void> unzipDataMod(File inputFile) async {
-    if (kDebugMode) {
+    if (kDebugMode || verbose) {
       print("Unpacking ${inputFile.path} \n to parent ${inputFile.parent.toString()}/$dataModDir");
     }
     
@@ -134,11 +136,11 @@ class CrmmService {
     final outputDir = Directory(p.join(inputFile.parent.path, dataModDir));
     await outputDir.create(recursive: true);
 
-    if (kDebugMode) print("Extracting to: ${outputDir.path}");
+    if (kDebugMode || verbose) print("Extracting to: ${outputDir.path}");
 
     await extractArchiveToDisk(archive, outputDir.path);
 
-    if (kDebugMode) print("Extraction complete.");
+    if (kDebugMode || verbose) print("Extraction complete.");
   }
 
   static List<String> sortBy = [

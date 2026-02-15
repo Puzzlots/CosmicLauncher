@@ -55,7 +55,7 @@ class InstanceManager {
         })
         .toList();
 
-    if (kDebugMode) {
+    if (kDebugMode || verbose) {
       print("Loaded: $ids");
     }
 

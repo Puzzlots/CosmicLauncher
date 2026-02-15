@@ -22,6 +22,8 @@ import 'package:polaris/utils/general_utils.dart';
 import 'package:polaris/utils/instance_utils.dart';
 import 'package:polaris/utils/persistent_widgets.dart';
 
+import 'package:args/args.dart';
+
 import 'utils/version_cache.dart';
 
 const String title = "Polaris Launcher";
@@ -31,7 +33,21 @@ const Color backgroundColour = Color(0xFF1E1E1E);
 
 final prefs = PersistentPrefs.open();
 
-void main() {
+late final bool verbose;
+
+void main(List<String> arguments) {
+  final parser = ArgParser()
+    ..addFlag(
+      'verbose',
+      abbr: 'v',
+      negatable: false,
+      help: 'Enable verbose logging',
+    );
+
+  final result = parser.parse(arguments);
+
+  verbose = result['verbose'] as bool;
+
   runApp(const CosmicReachLauncher());
   }
 
@@ -463,9 +479,9 @@ class LauncherHomeState extends State<LauncherHome> {
 
     switch (loader) {
       case 'Puzzle': {
-        final libDir = Directory("${getPersistentCacheDir().path}/puzzle_runtime/${resolveLatest('Puzzle  ', 'Core', instance['Core'] as String)}-${resolveLatest('Puzzle  ', 'Core', instance['Cosmic']as String)}");
+        final libDir = Directory("${getPersistentCacheDir().path}/puzzle_runtime/${resolveLatest('Puzzle', 'Core', (instance['Core'] as String?) ?? 'latest')}-${resolveLatest('Puzzle', 'Cosmic', (instance['Cosmic'] as String?) ?? 'latest')}");
         if (!libDir.existsSync()) {
-          if (kDebugMode) {
+          if (kDebugMode || verbose) {
             print("Folder does not exist");
           }
           return;
@@ -883,7 +899,7 @@ class LauncherHomeState extends State<LauncherHome> {
           ),
         ),
       );
-      if (kDebugMode) {
+      if (kDebugMode || verbose) {
         print(e.toString());
       }
     } finally {
@@ -899,7 +915,7 @@ class LauncherHomeState extends State<LauncherHome> {
       return false;
     }
     if (instance['loader'] == 'Puzzle') {
-      if (!Directory("${getPersistentCacheDir().path}/puzzle_runtime/${resolveLatest("Puzzle", "Core",instance['Core'] as String)}-${resolveLatest("Puzzle", "Cosmic", instance['Cosmic'] as String)}").existsSync()) {
+      if (!Directory("${getPersistentCacheDir().path}/puzzle_runtime/${resolveLatest("Puzzle", "Core",instance['Core'] as String? ?? 'latest')}-${resolveLatest("Puzzle", "Cosmic", instance['Cosmic'] as String? ?? 'latest')}").existsSync()) {
         _refreshInstance(context, instance);
         return false;
       }

@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
 
+import '../../main.dart';
+
 class CrmmProject {
   final String id;
   final String slug;
@@ -82,7 +84,7 @@ class CrmmProject {
           .map<Loader>((e) => _loaderFromString(e as String))
           .toList(),
     );
-    if (kDebugMode) {
+    if (kDebugMode || verbose) {
       print("Found ${project.name} by ${project.author}");
     }
     return project;
