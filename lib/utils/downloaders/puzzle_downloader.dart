@@ -1,12 +1,11 @@
 import 'dart:convert';
 import 'dart:io';
-import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:polaris/utils/cache_utils.dart';
 import 'package:polaris/utils/general_utils.dart';
 import 'package:polaris/utils/version_cache.dart';
 
-import '../../main.dart';
+import 'cosmic_downloader.dart';
 
 Future<void> downloadPuzzleVersion(
     String coreVersion,
@@ -72,11 +71,7 @@ Future<void> downloadPuzzleVersion(
     }
 
     if (!downloaded) {
-      if (kDebugMode || verbose) {
-        print("[Exception] failed to download $group:$artifact:$version");
-      } else {
-        throw Exception("failed to download $group:$artifact:$version");
-      }
+        downloaderLogger.log("failed to download $group:$artifact:$version");
     }
   }
 }
@@ -95,10 +90,8 @@ Future<void> downloadJars(List<List<String>> files, Directory libDir) async {
     final url = pair[1];
     final file = File("${libDir.path}/$fileName");
     if (await file.exists()) continue;
-    if (kDebugMode || verbose) {
-      print("Downloading $url");
-
-    } await tryDownload(url, file);
+      downloaderLogger.log("Downloading $url");
+    await tryDownload(url, file);
   }
 }
 
@@ -110,9 +103,7 @@ Future<bool> tryDownload(String url, File target) async {
       return true;
     }
   } catch (e) {
-    if (kDebugMode || verbose) {
-      print("[Exception] download error: $e");
-    }
+    downloaderLogger.log("download error: $e");
   }
   return false;
 }

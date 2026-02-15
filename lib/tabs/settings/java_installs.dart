@@ -1,7 +1,7 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 
+import '../../main.dart';
 import '../../utils/cache_utils.dart';
 import '../../utils/downloaders/temurin_downloader.dart';
 import '../../utils/general_utils.dart';
@@ -71,7 +71,7 @@ class _JavaInstallsPageState extends State<JavaInstallsPage> {
                       );
 
                       if (path != null && mounted) {
-                        if (kDebugMode) {print('[Info] Downloaded Java $version to $path');}
+                        logger.log('Downloaded Java $version to $path');
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(content: Text('Downloaded Java $version to $path')),
                         );

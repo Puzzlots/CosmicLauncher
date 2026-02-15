@@ -3,8 +3,12 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 
 import 'instance_utils.dart';
+import 'logger.dart';
+
+Logger vcLogger = Logger.logger("VersionCache");
 
 class VersionCache {
+
   static Future<void> fetchVersions({
     required Map<String, Map<String, String>> loaderRepos,
     required String cacheDirPath,
@@ -25,7 +29,9 @@ class VersionCache {
           try {
             localData =
             jsonDecode(cacheFile.readAsStringSync()) as Map<String, dynamic>;
-          } catch (_) {}
+          } catch (e) {
+            vcLogger.log(e.toString());
+          }
         }
 
         versions[loader]![modType] = _parseVersions(localData);
@@ -51,7 +57,9 @@ class VersionCache {
             try {
               localData =
               jsonDecode(cacheFile.readAsStringSync()) as Map<String, dynamic>;
-            } catch (_) {}
+            } catch (e) {
+              vcLogger.log(e.toString());
+            }
           }
 
           Map<String, dynamic>? remoteData;
@@ -62,7 +70,9 @@ class VersionCache {
             if (response.statusCode == 200) {
               remoteData = jsonDecode(response.body) as Map<String, dynamic>;
             }
-          } catch (_) {}
+          } catch (e) {
+            vcLogger.log(e.toString());
+          }
 
           final localLatest = _getLatestVersionId(localData);
           final remoteLatest = _getLatestVersionId(remoteData);
@@ -155,6 +165,7 @@ String resolveLatest(String loader, String modType, String? version) {
 
   final list = InstanceManager().currentVersions[loader]?[modType];
   if (list == null || list.isEmpty) {
+    vcLogger.log("No versions available for $loader/$modType at $version");
     throw StateError("No versions available for $loader/$modType at $version");
   }
 

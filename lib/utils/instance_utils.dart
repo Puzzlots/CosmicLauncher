@@ -2,14 +2,16 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
-import 'package:polaris/utils/version_cache.dart';
 
 import '../main.dart';
 import 'cache_utils.dart';
+import 'logger.dart';
+
+Logger instanceLogger = Logger.logger("Instances");
 
 class InstanceManager {
+
   static final InstanceManager _instance =
   InstanceManager._internal(baseDir: installPath);
 
@@ -55,9 +57,7 @@ class InstanceManager {
         })
         .toList();
 
-    if (kDebugMode || verbose) {
-      print("Loaded: $ids");
-    }
+    instanceLogger.log("Loaded: $ids");
 
     final raw = await Future.wait(ids.map(loadInstance));
     return raw.whereType<Map<String, dynamic>>().toList();

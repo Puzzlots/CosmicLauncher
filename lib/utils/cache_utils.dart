@@ -1,10 +1,12 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 
 import '../main.dart';
+import 'logger.dart';
+
+Logger cacheLog = Logger.logger("Cache");
 
 Directory getPersistentCacheDir({String installPath = installPath}) {
   late final String base;
@@ -45,16 +47,12 @@ Future<void> deleteCaches({String folder = 'caches', String installPath = instal
   if (await cacheDir.exists()) {
     try {
       await cacheDir.delete(recursive: true);
-      if (kDebugMode || verbose) {
-        print('Deleted cache directory: ${cacheDir.path}');
-      }
+      cacheLog.log('Deleted cache directory: ${cacheDir.path}');
     } catch (e) {
       stderr.writeln('Failed to delete cache directory: $e');
     }
   } else {
-    if (kDebugMode || verbose) {
-      print('No cache directory found at ${cacheDir.path}');
-    }
+    cacheLog.log('No cache directory found at ${cacheDir.path}');
   }
 }
 

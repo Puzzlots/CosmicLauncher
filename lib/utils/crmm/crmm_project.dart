@@ -1,6 +1,4 @@
-import 'package:flutter/foundation.dart';
-
-import '../../main.dart';
+import 'crmm_service.dart';
 
 class CrmmProject {
   final String id;
@@ -84,9 +82,8 @@ class CrmmProject {
           .map<Loader>((e) => _loaderFromString(e as String))
           .toList(),
     );
-    if (kDebugMode || verbose) {
-      print("Found ${project.name} by ${project.author}");
-    }
+    CrmmService.crmmLogger.log("Found ${project.name} by ${project.author}");
+
     return project;
   }
 }

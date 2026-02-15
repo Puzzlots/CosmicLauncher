@@ -138,14 +138,12 @@ class _JavaTesterButtonState extends State<JavaTesterButton> {
         return;
       }
 
-      // Ensure the file exists and is executable
       final file = File(javaPath);
       if (!file.existsSync()) {
         setState(() => _status = JavaStatus.broken);
         return;
       }
 
-      // Run java -version directly, without inheriting PATH fallback
       final result = await Process.run(javaPath, ['-version'],
         runInShell: false,
         workingDirectory: Directory(javaPath).parent.path,
@@ -154,7 +152,6 @@ class _JavaTesterButtonState extends State<JavaTesterButton> {
       final stderrStr = result.stderr.toString().trim();
       final stdoutStr = result.stdout.toString().trim();
 
-      // A valid java should always print version info to stderr
       if (result.exitCode == 0 &&
           (stderrStr.contains('version') || stdoutStr.contains('version'))) {
         setState(() => _status = JavaStatus.working);

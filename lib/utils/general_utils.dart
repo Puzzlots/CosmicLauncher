@@ -1,6 +1,5 @@
 import 'dart:io';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 
@@ -75,9 +74,7 @@ Future<bool> findAndCopyFile({
 }) async {
   await for (final entity in searchDir.list(recursive: true)) {
     if (entity is File && p.basename(entity.path) == fileName) {
-      if (kDebugMode || verbose) {
-        print('Copying $fileName to ${destinationDir.path} from ${entity.path}');
-      }
+        logger.log('Copying $fileName to ${destinationDir.path} from ${entity.path}');
       await destinationDir.create(recursive: true);
       await entity.copy(p.join(destinationDir.path, fileName));
       return true;

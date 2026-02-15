@@ -2,25 +2,24 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:archive/archive.dart';
 import 'package:archive/archive_io.dart';
-import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:mime/mime.dart';
 import 'package:path/path.dart' as p;
 import 'package:polaris/utils/crmm/crmm_project.dart';
 
-import '../../main.dart';
-
+import '../logger.dart';
 
 class CrmmService {
   static final dataModDir = "mods";
   static final javaModDir = "jmods";
 
+  static Logger crmmLogger = Logger.logger("CRMM Service");
+
   static Future<List<CrmmProject>> searchProjects(String query, String type, String gameVersion, String sortBy, bool versionLocked) async {
-    if (kDebugMode || verbose) {
-      print("Searching for $query as $type ${versionLocked ? "on Cosmic Reach version $gameVersion" : ''}");
-    }
+
+      crmmLogger.log("Searching for $query as $type ${versionLocked ? "on Cosmic Reach version $gameVersion" : ''}");
+
     final url = Uri.https('api.crmm.tech', '/api/search',
         {
           'q': query,
@@ -30,9 +29,8 @@ class CrmmService {
           if (versionLocked) 'v': gameVersion
         }
     );
-    if (kDebugMode || verbose) {
-      print(url);
-    }
+      crmmLogger.log(url.toString());
+
 
     try {
       final response = await http.get(url);
@@ -49,14 +47,11 @@ class CrmmService {
 
         return projects;
       } else {
-        if (kDebugMode || verbose) {
-          print("Error fetching CRMM projects ${response.statusCode}");
-        }
+          crmmLogger.log("Error fetching CRMM projects ${response.statusCode}");
+
       }
     } catch (e) {
-      if (kDebugMode || verbose) {
-        print(e);
-      }
+      crmmLogger.log(e.toString());
     }
 
     return [];
@@ -71,13 +66,9 @@ class CrmmService {
         }
     );
 
-    if (kDebugMode || verbose) {
-      print(url);
-    }
+    crmmLogger.log(url.toString());
+    crmmLogger.log('Downloading from: $url');
 
-    if (kDebugMode || verbose) {
-      print('Downloading from: $url');
-    }
 
     try {
       final response = await http.get(url);
@@ -112,22 +103,16 @@ class CrmmService {
         file.deleteSync();
       }
 
-
     } catch (e, stack) {
-      if (kDebugMode || verbose) {
-        print('Download failed: $e');
-        print(stack);
-      }
+      crmmLogger.log('Download failed: $e');
+      crmmLogger.log(stack.toString());
       rethrow;
     }
   }
 
-
   static Future<void> unzipDataMod(File inputFile) async {
-    if (kDebugMode || verbose) {
-      print("Unpacking ${inputFile.path} \n to parent ${inputFile.parent.toString()}/$dataModDir");
-    }
-    
+    crmmLogger.log("Unpacking ${inputFile.path} \n to parent ${inputFile.parent.toString()}/$dataModDir");
+
     if (lookupMimeType(inputFile.path) != "application/zip") return;
 
     final fileStream = InputFileStream(inputFile.path);
@@ -136,11 +121,9 @@ class CrmmService {
     final outputDir = Directory(p.join(inputFile.parent.path, dataModDir));
     await outputDir.create(recursive: true);
 
-    if (kDebugMode || verbose) print("Extracting to: ${outputDir.path}");
-
+    crmmLogger.log("Extracting to: ${outputDir.path}");
     await extractArchiveToDisk(archive, outputDir.path);
-
-    if (kDebugMode || verbose) print("Extraction complete.");
+    crmmLogger.log("Extraction complete.");
   }
 
   static List<String> sortBy = [

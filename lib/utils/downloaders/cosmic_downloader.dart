@@ -1,11 +1,12 @@
 import 'dart:io';
 
-import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
-import '../../main.dart';
 import '../cache_utils.dart';
+import '../logger.dart';
 import '../version_cache.dart';
+
+Logger downloaderLogger = Logger.logger("Downloader");
 
 Future<void> downloadCosmicReachVersion(
     String version,
@@ -25,9 +26,7 @@ Future<void> downloadCosmicReachVersion(
     final file = File("${savePath.path}/$artifact");
     await file.writeAsBytes(resp.bodyBytes);
   } catch (e) {
-    if (kDebugMode || verbose) {
-      print("Failed to download cosmic reach jar: $e");
-    }
+      downloaderLogger.log("Failed to download cosmic reach jar: $e");
     rethrow;
   }
 }

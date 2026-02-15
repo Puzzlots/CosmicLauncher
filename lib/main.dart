@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:args/args.dart';
 import 'package:dropdown_search/dropdown_search.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
@@ -20,9 +21,8 @@ import 'package:polaris/utils/downloaders/cosmic_downloader.dart';
 import 'package:polaris/utils/downloaders/puzzle_downloader.dart';
 import 'package:polaris/utils/general_utils.dart';
 import 'package:polaris/utils/instance_utils.dart';
+import 'package:polaris/utils/logger.dart';
 import 'package:polaris/utils/persistent_widgets.dart';
-
-import 'package:args/args.dart';
 
 import 'utils/version_cache.dart';
 
@@ -34,8 +34,9 @@ const Color backgroundColour = Color(0xFF1E1E1E);
 final prefs = PersistentPrefs.open();
 
 late final bool verbose;
+late Logger logger;
 
-void main(List<String> arguments) {
+void main(List<String> arguments) async {
   final parser = ArgParser()
     ..addFlag(
       'verbose',
@@ -48,6 +49,14 @@ void main(List<String> arguments) {
 
   verbose = result['verbose'] as bool;
 
+  await Logger.init();
+  logger = Logger.logger("Main");
+
+  if (verbose || kDebugMode) {
+    await Logger.tailLogs();
+  }
+
+  logger.log("Logging has began");
   runApp(const CosmicReachLauncher());
   }
 
@@ -56,7 +65,6 @@ class CosmicReachLauncher extends StatelessWidget {
 
   static final GlobalKey<LauncherHomeState> launcherHomeKey =
   GlobalKey<LauncherHomeState>();
-
 
   @override
   Widget build(BuildContext context) {
@@ -88,6 +96,12 @@ class LauncherHomeState extends State<LauncherHome> {
   final GlobalKey<ScaffoldMessengerState> _scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
   final instanceManager = InstanceManager();
   late List<Map<String, dynamic>> instances = [];
+
+  @override
+  void dispose() {
+    Logger.dispose();
+    super.dispose();
+  }
 
   Future<String> _getLauncherVersion() async {
     final info = await PackageInfo.fromPlatform();
@@ -180,7 +194,8 @@ class LauncherHomeState extends State<LauncherHome> {
         discovered.add(
           DiscoveredInstance(folder: entry, data: json as Map<String,dynamic>),
         );
-      } catch (_) {
+      } catch (e) {
+        logger.log(e.toString());
       }
     }
 
@@ -481,9 +496,7 @@ class LauncherHomeState extends State<LauncherHome> {
       case 'Puzzle': {
         final libDir = Directory("${getPersistentCacheDir().path}/puzzle_runtime/${resolveLatest('Puzzle', 'Core', (instance['Core'] as String?) ?? 'latest')}-${resolveLatest('Puzzle', 'Cosmic', (instance['Cosmic'] as String?) ?? 'latest')}");
         if (!libDir.existsSync()) {
-          if (kDebugMode || verbose) {
-            print("Folder does not exist");
-          }
+          logger.log("Folder does not exist");
           return;
         };
         final sep = Platform.isWindows ? ';' : ':';
@@ -560,6 +573,7 @@ class LauncherHomeState extends State<LauncherHome> {
       });
 
     } catch (e) {
+      logger.log("Failed to launch instance: $e");
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("Failed to launch instance: $e")),
@@ -890,6 +904,7 @@ class LauncherHomeState extends State<LauncherHome> {
       if (!await instanceManager.instanceExists(instance['uuid'] as String)) return;
       await instanceManager.saveInstance(instance['uuid'] as String, {...instance, "downloaded":true}..remove('downloading'));
     } catch (e) {
+      logger.log("Failed to refresh instance $e");
       if (!context.mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -899,9 +914,7 @@ class LauncherHomeState extends State<LauncherHome> {
           ),
         ),
       );
-      if (kDebugMode || verbose) {
-        print(e.toString());
-      }
+        logger.log(e.toString());
     } finally {
       setState(() {
         instance['downloading'] = false;
