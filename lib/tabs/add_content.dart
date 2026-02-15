@@ -260,7 +260,7 @@ class _CrmmSearchResultsState extends State<_CrmmSearchResults> {
     setState(() => loading = true);
 
     try {
-      final res = await CrmmService.searchProjects(query, projectType, (widget.instance['version'] as String).split('-')[0], sortBy, versionLocked);
+      final res = await CrmmService.searchProjects(query, projectType, (resolveLatest("Vanilla", "Client", widget.instance['version'] as String).split('-')[0]), sortBy, versionLocked);
       setState(() {
         results = res;
       });
@@ -302,7 +302,7 @@ class _CrmmSearchResultsState extends State<_CrmmSearchResults> {
             trailing: IconButton(
               icon: Icon(Icons.download),
               onPressed: () {
-                CrmmService.downloadLatestProject(project.slug, widget.selectedProjectType, widget.versionLocked, "${getPersistentCacheDir().path}/instances/${widget.instance['uuid'] as String}", (widget.instance['version'] as String).split('-')[0]);
+                CrmmService.downloadLatestProject(project.slug, widget.selectedProjectType, widget.versionLocked, "${getPersistentCacheDir().path}/instances/${widget.instance['uuid'] as String}", (resolveLatest("Vanilla", "Client", widget.instance['version'] as String).split('-')[0]));
               },
             ),
           ),

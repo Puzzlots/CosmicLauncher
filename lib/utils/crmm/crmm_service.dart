@@ -103,15 +103,14 @@ class CrmmService {
       if (type == 'mod'){
         final outputDir = Directory(p.join(file.parent.path, javaModDir));
         await outputDir.create(recursive: true);
-        unawaited(file.rename(p.join(outputDir.path, file.path.split("/").last))); // i mean like the puzzle thing needs to be updated now because its looking in the wrong place?
+        unawaited(file.rename(p.join(outputDir.path, file.path.split("/").last)));
       } else {
         await unzipDataMod(file);
-        unawaited(file.delete());
+
+        file.deleteSync();
       }
 
-      if (kDebugMode) {
-        print('Downloaded to: ${file.path}');
-      }
+
     } catch (e, stack) {
       if (kDebugMode) {
         print('Download failed: $e');
@@ -120,6 +119,7 @@ class CrmmService {
       rethrow;
     }
   }
+
 
   static Future<void> unzipDataMod(File inputFile) async {
     if (kDebugMode) {
@@ -150,23 +150,3 @@ class CrmmService {
   ];
 
 }
-
-// [
-// CrmmProject(
-// author: "Spicy",
-// categories: ["vanilla"],
-// datePublished: DateTime(2026),
-// dateUpdated: DateTime(2026),
-// downloads: 100,
-// featuredCategories: [],
-// featuredGalleryUrl: null,
-// followers: 10,
-// gameVersions: ["0.5.6"],
-// iconUrl: null,
-// id: "1234",
-// loaders: [Loader.puzzle],
-// name: "Zoom",
-// projectType: "mod",
-// slug: "zoom",
-// summary: "")
-// ];

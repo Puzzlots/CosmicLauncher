@@ -90,7 +90,7 @@ BEGIN
         BLOCK "040904e4"
         BEGIN
             VALUE "CompanyName", "dev.puzzlots" "\0"
-            VALUE "FileDescription", "A launcher for cosmic reach" "\0"
+            VALUE "FileDescription", "Polaris Launcher" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
             VALUE "InternalName", "polaris_launcher" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2025 dev.puzzlots. All rights reserved." "\0"

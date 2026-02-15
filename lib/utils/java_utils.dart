@@ -117,23 +117,31 @@ class JavaTesterButton extends StatefulWidget {
   State<JavaTesterButton> createState() => _JavaTesterButtonState();
 }
 
+enum JavaStatus {
+  idle,
+  testing,
+  working,
+  broken,
+  error
+}
+
 class _JavaTesterButtonState extends State<JavaTesterButton> {
-  String _status = 'idle'; // idle, testing, working, broken, error
+  JavaStatus _status = JavaStatus.idle;
 
   Future<void> _testJar(Map<String, String> java) async {
-    setState(() => _status = 'testing');
+    setState(() => _status = JavaStatus.testing);
 
     try {
       final javaPath = _resolveJavaExecutable(java['path'] ?? '');
       if (javaPath == null) {
-        setState(() => _status = 'broken');
+        setState(() => _status = JavaStatus.broken);
         return;
       }
 
       // Ensure the file exists and is executable
       final file = File(javaPath);
       if (!file.existsSync()) {
-        setState(() => _status = 'broken');
+        setState(() => _status = JavaStatus.broken);
         return;
       }
 
@@ -149,16 +157,16 @@ class _JavaTesterButtonState extends State<JavaTesterButton> {
       // A valid java should always print version info to stderr
       if (result.exitCode == 0 &&
           (stderrStr.contains('version') || stdoutStr.contains('version'))) {
-        setState(() => _status = 'working');
+        setState(() => _status = JavaStatus.working);
       } else {
-        setState(() => _status = 'broken');
+        setState(() => _status = JavaStatus.broken);
       }
     } on ProcessException {
-      setState(() => _status = 'broken');
+      setState(() => _status = JavaStatus.broken);
     } on TimeoutException {
-      setState(() => _status = 'error');
+      setState(() => _status = JavaStatus.error);
     } catch (_) {
-      setState(() => _status = 'error');
+      setState(() => _status = JavaStatus.error);
     }
   }
 
@@ -193,16 +201,16 @@ class _JavaTesterButtonState extends State<JavaTesterButton> {
     String label;
 
     switch (_status) {
-      case 'testing':
+      case JavaStatus.testing:
         icon = Icons.hourglass_bottom;
         label = 'Testing...';
-      case 'working':
+      case JavaStatus.working:
         icon = Icons.check_circle;
         label = 'Working';
-      case 'broken':
+      case JavaStatus.broken:
         icon = Icons.error;
         label = 'Broken';
-      case 'error':
+      case JavaStatus.error:
         icon = Icons.warning;
         label = 'Error';
       default:
@@ -211,7 +219,7 @@ class _JavaTesterButtonState extends State<JavaTesterButton> {
     }
 
     return ElevatedButton.icon(
-      onPressed: _status == 'testing'
+      onPressed: _status == JavaStatus.testing
           ? null
           : () => _testJar(widget.java),
       icon: Icon(icon),

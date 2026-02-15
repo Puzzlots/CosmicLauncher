@@ -10,15 +10,16 @@ import 'package:nanoid/nanoid.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path/path.dart' as p;
 import 'package:polaris/tabs/add_content.dart';
+import 'package:polaris/tabs/settings/default_options.dart';
+import 'package:polaris/tabs/settings/java_installs.dart';
+import 'package:polaris/tabs/settings/resource_management.dart';
 import 'package:polaris/utils/cache_utils.dart';
 import 'package:polaris/utils/credentials.dart';
 import 'package:polaris/utils/crmm/crmm_service.dart';
 import 'package:polaris/utils/downloaders/cosmic_downloader.dart';
 import 'package:polaris/utils/downloaders/puzzle_downloader.dart';
-import 'package:polaris/utils/downloaders/temurin_downloader.dart';
 import 'package:polaris/utils/general_utils.dart';
 import 'package:polaris/utils/instance_utils.dart';
-import 'package:polaris/utils/java_utils.dart';
 import 'package:polaris/utils/persistent_widgets.dart';
 
 import 'utils/version_cache.dart';
@@ -37,6 +38,9 @@ void main() {
 class CosmicReachLauncher extends StatelessWidget {
   const CosmicReachLauncher({super.key});
 
+  static final GlobalKey<LauncherHomeState> launcherHomeKey =
+  GlobalKey<LauncherHomeState>();
+
 
   @override
   Widget build(BuildContext context) {
@@ -50,7 +54,7 @@ class CosmicReachLauncher extends StatelessWidget {
           secondary: Color(0xFF81C784),
         ),
       ),
-      home: const LauncherHome(),
+      home: LauncherHome(key: launcherHomeKey),
     );
   }
 }
@@ -61,10 +65,10 @@ class LauncherHome extends StatefulWidget {
   const LauncherHome({super.key});
 
   @override
-  State<LauncherHome> createState() => _LauncherHomeState();
+  State<LauncherHome> createState() => LauncherHomeState();
 }
 
-class _LauncherHomeState extends State<LauncherHome> {
+class LauncherHomeState extends State<LauncherHome> {
   final GlobalKey<ScaffoldMessengerState> _scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
   final instanceManager = InstanceManager();
   late List<Map<String, dynamic>> instances = [];
@@ -78,19 +82,19 @@ class _LauncherHomeState extends State<LauncherHome> {
 
   LauncherTab activeTab = LauncherTab.library; // track which tab is active
 
-  Future<void> _loadInstances() async {
+  Future<void> loadInstances() async {
     unawaited(
-      VersionCache.fetchVersions(
-      loaderRepos: loaderRepos,
-      cacheDirPath: "${getPersistentCacheDir().path}/caches/versions",
-      onUpdate: (versions) {
-        if (context.mounted) {
-          setState(() {
-            InstanceManager().currentVersions = versions;
-          });
-        }
-      },
-    ));
+        VersionCache.fetchVersions(
+          loaderRepos: loaderRepos,
+          cacheDirPath: "${getPersistentCacheDir().path}/caches/versions",
+          onUpdate: (versions) {
+            if (context.mounted) {
+              setState(() {
+                InstanceManager().currentVersions = versions;
+              });
+            }
+          },
+        ));
     instances = await instanceManager.loadAllInstances();
     setState(() {}); // trigger UI update
 
@@ -103,7 +107,7 @@ class _LauncherHomeState extends State<LauncherHome> {
   @override
   void initState() {
     super.initState();
-    _loadInstances();
+    loadInstances();
     _load();
   }
 
@@ -120,7 +124,7 @@ class _LauncherHomeState extends State<LauncherHome> {
     details['uuid'] = id;
     await instanceManager.saveInstance(id, details);
 
-    await _loadInstances();
+    await loadInstances();
   }
 
   String? getOtherCRLInstancesDir() {
@@ -250,7 +254,7 @@ class _LauncherHomeState extends State<LauncherHome> {
 
       await manager.saveInstance(id, data);
     }
-    await _loadInstances();
+    await loadInstances();
   }
 
   //Loaders
@@ -493,7 +497,7 @@ class _LauncherHomeState extends State<LauncherHome> {
           '-Xmx${maxMem}m',
           '-jar',
           "${getPersistentCacheDir().path}/cosmic_versions/cosmic-reach-client-${resolveLatest('Vanilla','Client', instance['version'] as String)}.jar",
-          '-s "${getPersistentCacheDir().path}/instances/${instance['uuid'] as String}"'
+          '-s "${getPersistentCacheDir().path}/instances/${instance['uuid'] as String}/"'
         ];
       }
       default: return;
@@ -536,7 +540,7 @@ class _LauncherHomeState extends State<LauncherHome> {
         runningInstances.value--;
         instance['playtime'] = (instance['playtime'] ?? 0) + endTime.difference(startTime).inSeconds;
         instanceManager.saveInstance(instance['uuid'] as String, instance); //for some reason it still doesnt want to work :(, im using a function i made before and it still doesnt want to work
-        _loadInstances();
+        loadInstances();
       });
 
     } catch (e) {
@@ -927,7 +931,7 @@ class _LauncherHomeState extends State<LauncherHome> {
                 // ignore: unused_element
                 void initState() {
                   super.initState();
-                  _loadInstances();
+                  loadInstances();
                 }
                 instanceManager.deleteInstance(instance['uuid']);
               });
@@ -1004,30 +1008,6 @@ class _LauncherHomeState extends State<LauncherHome> {
       context: context,
       builder: (ctx) {
         int activeTab = 0;
-        // Controllers & values
-        final TextEditingController appDirController = TextEditingController(text: getPersistentCacheDir().path);
-        final TextEditingController  maxDownloadsController = TextEditingController(text: prefs.getValue('max_concurrent_downloads', defaultValue: 3).toString());
-        double? maxDownloads = double.tryParse(maxDownloadsController.text);
-
-        final TextEditingController maxWritesController = TextEditingController(text: prefs.getValue('max_concurrent_writes', defaultValue: 10).toString());
-        double? maxWrites = double.tryParse(maxWritesController.text);
-
-        final TextEditingController minMemoryController = TextEditingController(text: prefs.getValue('defaults_instance_memory_min', defaultValue: 1024).toString());
-        double? minMemory = double.tryParse(minMemoryController.text);
-        
-        final TextEditingController maxMemoryController = TextEditingController(text: prefs.getValue('defaults_instance_memory_max', defaultValue: 4096).toString());
-        double? maxMemory = double.tryParse(maxMemoryController.text);
-        
-        bool fullscreen = prefs.getValue("defaults_instance_fullscreen", defaultValue: false);
-
-        final TextEditingController javaVersionController = TextEditingController(text: '17');
-        final TextEditingController downloadDirController = TextEditingController();
-
-        downloadDirController.text = p.join(getPersistentCacheDir().path, "java");
-
-        OutlineInputBorder darkGreyBorder = const OutlineInputBorder(
-          borderSide: BorderSide(color: Colors.grey, width: 1),
-        );
 
         return StatefulBuilder(
           builder: (context, setState) {
@@ -1111,54 +1091,6 @@ class _LauncherHomeState extends State<LauncherHome> {
               );
             }
 
-            Widget buildPersistentSliderWithController({
-              required String keyName,
-              required String label,
-              required double value,
-              required TextEditingController controller,
-              required double min,
-              required double max,
-              required ValueChanged<double> onChanged,
-              double entryWidth = 80,
-            }) {
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(label, style: const TextStyle(color: Colors.white)),
-                  Flex(
-                    direction: Axis.horizontal,
-                    children: [
-                      Expanded(
-                        child: PersistentSlider(
-                          value: value,
-                          min: min,
-                          max: max,
-                          onChanged: onChanged,
-                          divisions: (max - min).toInt(),
-                          activeColor: Colors.green,
-                          keyName: keyName,
-                        ),
-                      ),
-                      SizedBox(
-                        width: entryWidth,
-                        child: TextField(
-                          controller: controller,
-                          decoration: InputDecoration(
-                            border: darkGreyBorder,
-                            isDense: true,
-                          ),
-                          onSubmitted: (v) {
-                            final val = double.tryParse(v);
-                            if (val != null) onChanged(val.clamp(min, max));
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              );
-            }
-
             return Dialog(
               insetPadding: const EdgeInsets.all(16),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -1212,301 +1144,13 @@ class _LauncherHomeState extends State<LauncherHome> {
                               child: Builder(builder: (_) {
                                 switch (activeTab) {
                                   case 0: // Java Installations
-                                    return Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        // Downloader UI
-                                        Padding(
-                                          padding: const EdgeInsets.all(8.0),
-                                          child: Column(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
-                                            children: [
-                                              Row(
-                                                children: [
-                                                  const Text(
-                                                    'Java Version: ',
-                                                    style: TextStyle(color: Colors.white, fontSize: 16),
-                                                  ),
-                                                  const SizedBox(width: 8),
-                                                  SizedBox(
-                                                    width: 60,
-                                                    child: TextField(
-                                                      controller: javaVersionController,
-                                                      keyboardType: TextInputType.number,
-                                                      decoration: const InputDecoration(
-                                                        border: OutlineInputBorder(),
-                                                        isDense: true,
-                                                      ),
-                                                    ),
-                                                  ),
-                                                  const SizedBox(width: 8),
-                                                  ElevatedButton.icon(
-                                                    onPressed: () async {
-                                                      final versionText = javaVersionController.text;
-                                                      final version = int.tryParse(versionText);
-                                                      if (version == null) {
-                                                        if (!mounted) return;
-                                                        ScaffoldMessenger.of(context).showSnackBar(
-                                                          const SnackBar(content: Text('Please enter a valid Java version number')),
-                                                        );
-                                                        return;
-                                                      }
-
-                                                      final outDir = downloadDirController.text;
-                                                      final path = await TemurinDownloader.download(
-                                                        version: version,
-                                                        outDir: outDir,
-                                                      );
-
-                                                      if (path != null && mounted) {
-                                                        if (kDebugMode) {print('[Info] Downloaded Java $version to $path');}
-                                                        ScaffoldMessenger.of(context).showSnackBar(
-                                                          SnackBar(content: Text('Downloaded Java $version to $path')),
-                                                        );
-                                                      }
-                                                    },
-                                                    icon: const Icon(Icons.download),
-                                                    label: const Text('Download'),
-                                                  ),
-                                                ],
-                                              ),
-                                              const SizedBox(height: 8),
-                                              Row(
-                                                children: [
-                                                  const Text(
-                                                    'Download Directory: ',
-                                                    style: TextStyle(color: Colors.white),
-                                                  ),
-                                                  const SizedBox(width: 8),
-                                                  Expanded(
-                                                    child: TextField(
-                                                      controller: downloadDirController,
-                                                      decoration: const InputDecoration(
-                                                        border: OutlineInputBorder(),
-                                                        isDense: true,
-                                                      ),
-                                                    ),
-                                                  ),
-                                                  IconButton(
-                                                    icon: const Icon(Icons.folder_open),
-                                                    onPressed: () async {
-                                                      final folder = downloadDirController.text;
-                                                      await folder.browseFolder();
-                                                      if (mounted) {
-                                                        setState(() {
-                                                          downloadDirController.text = folder;
-                                                        });
-                                                      }
-                                                    },
-                                                  ),
-                                                ],
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                        const Divider(color: Colors.grey),
-                                        // Existing Java installations list
-                                        Expanded(
-                                          child: FutureBuilder<List<Map<String, String>>>(
-                                            future: detectJavaInstallations(),
-                                            builder: (context, snapshot) {
-                                              if (snapshot.connectionState == ConnectionState.waiting) {
-                                                return const Center(child: CircularProgressIndicator());
-                                              }
-                                              if (snapshot.hasError) {
-                                                return Center(child: Text('Error: ${snapshot.error}'));
-                                              }
-                                              final javaInstallations = snapshot.data ?? [];
-                                              if (javaInstallations.isEmpty) {
-                                                return const Center(child: Text('No Java installations found.'));
-                                              }
-                                              return ListView.builder(
-                                                itemCount: javaInstallations.length,
-                                                itemBuilder: (context, index) {
-                                                  final java = javaInstallations[index];
-                                                  return Padding(
-                                                    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
-                                                    child: Column(
-                                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                                      children: [
-                                                        Text(java['name']!, style: const TextStyle(color: Colors.white, fontSize: 20)),
-                                                        const SizedBox(height: 4),
-                                                        TextField(
-                                                          controller: TextEditingController(text: java['path']),
-                                                          onChanged: (value) => java['path'] = value,
-                                                          decoration: const InputDecoration(
-                                                            border: OutlineInputBorder(),
-                                                          ),
-                                                        ),
-                                                        const SizedBox(height: 4),
-                                                        Row(
-                                                          children: [
-                                                            ElevatedButton.icon(
-                                                              onPressed: () => java['path']?.browseFolder(),
-                                                              icon: const Icon(Icons.folder_open),
-                                                              label: const Text("Browse"),
-                                                            ),
-                                                            const SizedBox(width: 4),
-                                                            JavaTesterButton(java: java),
-                                                          ],
-                                                        ),
-                                                      ],
-                                                    ),
-                                                  );
-                                                },
-                                              );
-                                            },
-                                          ),
-                                        ),
-                                      ],
-                                    );
-
+                                    return JavaInstallsPage();
                                   case 1:
                                   // Default Instance Options
-                                    return SingleChildScrollView(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          const Text("Window Size", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                                          Row(
-                                            children: [
-                                              PersistentCheckbox(value: fullscreen, onChanged: (v) => setState(() => fullscreen = v!), keyName: 'defaults_instance_fullscreen',),
-                                              const Text("Fullscreen", style: TextStyle(color: Colors.white)), //TODO
-                                            ],
-                                          ),
-                                          const SizedBox(height: 8),
-                                          Flex(
-                                            direction: Axis.horizontal,
-                                            children: [
-                                              Expanded(
-                                                child: PersistentTextField(
-                                                  enabled: !fullscreen,
-                                                  decoration: InputDecoration(labelText: "Width", border: darkGreyBorder),
-                                                  keyName: 'defaults_instance_width', //TODO
-                                                ),
-                                              ),
-                                              const SizedBox(width: 8),
-                                              Expanded(
-                                                child: PersistentTextField(
-                                                  enabled: !fullscreen,
-                                                  decoration: InputDecoration(labelText: "Height", border: darkGreyBorder),
-                                                  keyName: 'defaults_instance_height', //TODO
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                          const SizedBox(height: 16),
-                                          buildPersistentSliderWithController(
-                                            label: "Min Memory (MB)",
-                                            value: minMemory!.toDouble(),
-                                            controller: minMemoryController,
-                                            min: 256,
-                                            max: 16384,
-                                            onChanged: (v) => setState(() {
-                                              minMemory = v;
-                                              minMemoryController.text = v.toInt().toString();
-                                            }),
-                                            entryWidth: 100,
-                                            keyName: 'defaults_instance_memory_min',
-                                          ),
-                                          const SizedBox(height: 8),
-                                          buildPersistentSliderWithController(
-                                            label: "Max Memory (MB)",
-                                            value: maxMemory!.toDouble(),
-                                            controller: maxMemoryController,
-                                            min: 256,
-                                            max: 16384,
-                                            onChanged: (v) => setState(() {
-                                              maxMemory = v;
-                                              maxMemoryController.text = v.toInt().toString();
-                                            }),
-                                            entryWidth: 100,
-                                            keyName: 'defaults_instance_memory_max',
-                                          ),
-                                          const SizedBox(height: 16),
-                                          PersistentTextField(
-                                            decoration: InputDecoration(
-                                              labelText: "Java Arguments",
-                                              hintText: "Comma to separate",
-                                              border: darkGreyBorder,
-                                            ), keyName: 'defaults_instance_args',
-                                          ),
-                                          const SizedBox(height: 8),
-                                          PersistentTextField(
-                                            decoration: InputDecoration(
-                                              labelText: "Environment Variables",
-                                              hintText: "Comma to separate",
-                                              border: darkGreyBorder,
-                                            ), keyName: 'defaults_instance_vars',
-                                          ),
-                                        ],
-                                      ),
-                                    );
+                                    return ResourceManagementPage(prefs: prefs);
                                   case 2:
                                   // Resource Management
-                                    return SingleChildScrollView(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Flex(
-                                            direction: Axis.horizontal,
-                                            children: [
-                                              Expanded(
-                                                child: TextField(
-                                                  controller: appDirController,
-                                                  decoration: InputDecoration(
-                                                    labelText: "App Directory",
-                                                    border: darkGreyBorder,
-                                                  ),
-                                                ),
-                                              ),
-                                              IconButton(icon: const Icon(Icons.folder_open), onPressed: () {
-                                                appDirController.text.browseFolder();
-                                                }),
-                                            ],
-                                          ),
-                                          const SizedBox(height: 8),
-                                          Row(
-                                            children: [
-                                              ElevatedButton(onPressed: () {
-                                                deleteCaches();
-                                              }, child: const Text("Purge Cache")),
-                                              ElevatedButton(onPressed: () async {
-                                                await deleteCaches(folder: 'instances');
-                                                await Future<dynamic>.delayed(const Duration(milliseconds: 50)); // release handles
-                                                await _loadInstances();
-                                              }, child: const Text("Purge Instances")),
-                                            ],
-                                          ),
-                                          const SizedBox(height: 16),
-                                          buildPersistentSliderWithController(
-                                            label: "Max Concurrent Downloads",
-                                            value: maxDownloads!.toDouble(),
-                                            controller: maxDownloadsController,
-                                            min: 1,
-                                            max: 10,
-                                            onChanged: (v) => setState(() {
-                                              maxDownloads = v.toDouble();
-                                              maxDownloadsController.text = maxDownloads!.toInt().toString(); //TODO
-                                            }),
-                                            keyName: 'max_concurrent_downloads',
-                                          ),
-                                          const SizedBox(height: 8),
-                                          buildPersistentSliderWithController(
-                                            label: "Max Concurrent Writes",
-                                            value: maxWrites!.toDouble(),
-                                            controller: maxWritesController,
-                                            min: 1,
-                                            max: 50,
-                                            onChanged: (v) => setState(() {
-                                              maxWrites = v.toDouble();
-                                              maxWritesController.text = maxWrites!.toInt().toString(); //TODO
-                                            }),
-                                            keyName: 'max_concurrent_writes',
-                                          ),
-                                        ],
-                                      ),
-                                    );
+                                    return DefaultOptionsPage(prefs: prefs,);
                                   default:
                                     return const SizedBox();
                                 }

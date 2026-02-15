@@ -311,3 +311,55 @@ class _PersistentTextFieldState extends State<PersistentTextField> {
     );
   }
 }
+
+Widget buildPersistentSliderWithController({
+  required String keyName,
+  required String label,
+  required double value,
+  required TextEditingController controller,
+  required double min,
+  required double max,
+  required ValueChanged<double> onChanged,
+  double entryWidth = 80,
+}) {
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(label, style: const TextStyle(color: Colors.white)),
+      Flex(
+        direction: Axis.horizontal,
+        children: [
+          Expanded(
+            child: PersistentSlider(
+              value: value,
+              min: min,
+              max: max,
+              onChanged: onChanged,
+              divisions: (max - min).toInt(),
+              activeColor: Colors.green,
+              keyName: keyName,
+            ),
+          ),
+          SizedBox(
+            width: entryWidth,
+            child: TextField(
+              controller: controller,
+              decoration: InputDecoration(
+                border: darkGreyBorder,
+                isDense: true,
+              ),
+              onSubmitted: (v) {
+                final val = double.tryParse(v);
+                if (val != null) onChanged(val.clamp(min, max));
+              },
+            ),
+          ),
+        ],
+      ),
+    ],
+  );
+}
+
+OutlineInputBorder darkGreyBorder = const OutlineInputBorder(
+  borderSide: BorderSide(color: Colors.grey, width: 1),
+);
