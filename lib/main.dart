@@ -97,8 +97,8 @@ class LauncherHome extends StatefulWidget {
 
 class LauncherHomeState extends State<LauncherHome> {
   final GlobalKey<ScaffoldMessengerState> _scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
-  final instanceManager = InstanceManager();
-  late List<Map<String, dynamic>> instances = [];
+  static final instanceManager = InstanceManager();
+  static List<Map<String, dynamic>> instances = [];
 
   @override
   void dispose() {
@@ -115,37 +115,17 @@ class LauncherHomeState extends State<LauncherHome> {
 
   LauncherTab activeTab = LauncherTab.library; // track which tab is active
 
-  Future<void> loadInstances() async {
-    unawaited(
-        VersionCache.fetchVersions(
-          loaderRepos: loaderRepos,
-          cacheDirPath: "${getPersistentCacheDir().path}/caches/versions",
-          onUpdate: (versions) {
-            if (context.mounted) {
-              setState(() {
-                InstanceManager().currentVersions = versions;
-              });
-            }
-          },
-        ));
-    instances = await instanceManager.loadAllInstances();
-    setState(() {}); // trigger UI update
 
-    for (var instance in instances) {if (instance['downloaded'] != true) {
-      if (!mounted) return;
-      unawaited(_refreshInstance(context, instance));
-    }}
-  }
 
   @override
   void initState() {
     super.initState();
-    loadInstances();
+    instanceManager.loadInstances(context);
     _load();
   }
 
   Future<void> _addInstance({Map<String, dynamic>? details}) async {
-    details ??= await askForInstanceDetails(context);
+    details ??= await instanceManager.askForInstanceDetails(context);
     if (details == null) return;
 
     String id;
@@ -157,7 +137,7 @@ class LauncherHomeState extends State<LauncherHome> {
     details['uuid'] = id;
     await instanceManager.saveInstance(id, details);
 
-    await loadInstances();
+    await instanceManager.loadInstances(context);
   }
 
   String? getOtherCRLInstancesDir() {
@@ -288,184 +268,7 @@ class LauncherHomeState extends State<LauncherHome> {
 
       await manager.saveInstance(id, data);
     }
-    await loadInstances();
-  }
-
-  //Loaders
-  final loaderRepos = {
-    "Vanilla": {
-      "Client": "PuzzlesHQ/CRArchive/main"
-    },
-    "Puzzle": {
-      "Core": "PuzzlesHQ/puzzle-loader-core/versioning",
-      "Cosmic": "PuzzlesHQ/puzzle-loader-cosmic/versioning",
-    }
-  };
-
-  Future<Map<String, dynamic>?> askForInstanceDetails(BuildContext context) async {
-    final TextEditingController nameController = TextEditingController();
-    String selectedVersion = "latest";
-
-    final loaders = loaderRepos.keys.toList();
-    String selectedLoader = loaders.first;
-
-    final Map<String, String> selectedSubVersions = {};
-
-    // Shared dimensions for both pages
-    const double dialogWidth = 400;
-    const double dialogMaxHeight = 400;
-
-    Widget buildDropdown({
-      required String label,
-      required List<String> items,
-      required String selected,
-      required void Function(String) onChanged,
-    }) {
-      return DropdownSearch<String>(
-        items: (filter, _) {
-          if (filter.isEmpty) return items;
-          return items
-              .where((v) => v.toLowerCase().contains(filter.toLowerCase()))
-              .toList();
-        },
-        selectedItem: selected,
-        onSaved: (v) {
-          if (v != null) onChanged(v);
-        },
-        popupProps: const PopupProps.menu(showSearchBox: true),
-        decoratorProps: DropDownDecoratorProps(
-          decoration: InputDecoration(
-              labelText: label
-          ),
-        ),
-      );
-    }
-
-    return showDialog<Map<String, dynamic>>(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) {
-        bool onSubVersionPage = false;
-        bool hasFetchedVersions = false;
-
-        return StatefulBuilder(
-          builder: (context, setState) {
-            if (!hasFetchedVersions) {
-              hasFetchedVersions = true;
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                VersionCache.fetchVersions(
-                  loaderRepos: loaderRepos,
-                  cacheDirPath: "${getPersistentCacheDir().path}/caches/versions",
-                  onUpdate: (versions) {
-                    if (context.mounted) {
-                      setState(() {
-                        InstanceManager().currentVersions = versions;
-                      });
-                    }
-                  },
-                );
-              });
-            }
-
-            void goToSubVersionPage() => setState(() => onSubVersionPage = true);
-            void goBack() => setState(() => onSubVersionPage = false);
-
-            return AlertDialog(
-              title: Text(onSubVersionPage ? "$selectedLoader Versions" : "New Instance"),
-              content: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: dialogWidth, maxHeight: dialogMaxHeight),
-                child: SingleChildScrollView(
-                  child: InstanceManager().currentVersions.isEmpty
-                      ? const Center(child: CircularProgressIndicator())
-                      : Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: onSubVersionPage
-                        ? [
-                      for (final modType in InstanceManager().currentVersions[selectedLoader]?.keys ?? [])
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: buildDropdown(
-                            label: "$modType Version",
-                            items: (InstanceManager().currentVersions[selectedLoader]?[modType] ?? [])
-                                .map((v) => v.keys.first)
-                                .toList(),
-                            selected: selectedSubVersions[modType] ??
-                                ((InstanceManager().currentVersions[selectedLoader]?[modType]?.isNotEmpty ?? false)
-                                    ? InstanceManager().currentVersions[selectedLoader]![modType]!.first.keys.first
-                                    : ""),
-                            onChanged: (v) => setState(() => selectedSubVersions[modType as String] = v),
-                          ),
-                        ),
-                    ]
-                        : [
-                      TextField(
-                        controller: nameController,
-                        decoration: const InputDecoration(labelText: "Instance Name"),
-                        autofocus: true,
-                        maxLength: 40,
-                      ),
-                      const SizedBox(height: 12),
-                      buildDropdown(
-                        label: "Game Version",
-                        items: (InstanceManager().currentVersions['Vanilla']?['Client'] ?? [])
-                            .map((v) => v.keys.first)
-                            .toList(),
-                        selected: selectedVersion,
-                        onChanged: (v) => setState(() => selectedVersion = v),
-                      ),
-                      const SizedBox(height: 12),
-                      DropdownButtonFormField<String>(
-                        initialValue: selectedLoader,
-                        items: loaders
-                            .map((v) => DropdownMenuItem(value: v, child: Text(v)))
-                            .toList(),
-                        onChanged: (value) {
-                          if (value != null) setState(() => selectedLoader = value);
-                        },
-                        borderRadius: BorderRadius.circular(12),
-                        decoration: const InputDecoration(labelText: "Loader"),
-                        dropdownColor: backgroundColour,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              actions: [
-                if (onSubVersionPage)
-                  TextButton(onPressed: goBack, child: const Text("Back"))
-                else
-                  TextButton(onPressed: () => Navigator.pop(ctx, null), child: const Text("Cancel")),
-                ElevatedButton(
-                  onPressed: () async {
-                    final navigator = Navigator.of(ctx);
-                    if (!onSubVersionPage && selectedLoader != "Vanilla") {
-                      goToSubVersionPage();
-                      return;
-                    }
-
-                    String versionInfo = selectedVersion;
-                    Map<String,dynamic> loaderInfo = {
-                      "name": nameController.text.trim(),
-                      "version": versionInfo,
-                      "loader": selectedLoader,
-                    };
-
-                    if (selectedLoader == "Puzzle") {
-                      loaderInfo.addEntries(selectedSubVersions.entries);
-                      loaderInfo.addAll({"versions": "$versionInfo | ${selectedSubVersions.entries.map((e) => "${e.key}:${e.value}").join(", ")}"});
-
-                    } else {loaderInfo.addEntries(selectedSubVersions.entries);}
-                    loaderInfo['downloaded'] = false;
-                    navigator.pop(loaderInfo);
-                  },
-                  child: Text(onSubVersionPage ? "Create" : (selectedLoader == "Vanilla" ? "Create" : "Next")),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
+    await instanceManager.loadInstances(context);
   }
 
   final runningInstances = ValueNotifier<int>(0);
@@ -479,7 +282,7 @@ class LauncherHomeState extends State<LauncherHome> {
 
     if (!_checkVersionDownloaded(instance)) return;
     if (instance['downloaded'] == false) {
-      unawaited(_refreshInstance(context, instance));
+      unawaited(instanceManager.refreshInstance(context, instance));
       return;
     }
 
@@ -503,7 +306,7 @@ class LauncherHomeState extends State<LauncherHome> {
         final libFile = File("${getPersistentCacheDir().path}/puzzle_runtime/${resolveLatest('Puzzle', 'Core', (instance['Core'] as String?) ?? 'latest')}-${resolveLatest('Puzzle', 'Cosmic', (instance['Cosmic'] as String?) ?? 'latest')}.txt");
         if (!libFile.existsSync()) {
           logger.log("Library file does not exist");
-          unawaited(_refreshInstance(context, instance));
+          unawaited(instanceManager.refreshInstance(context, instance));
           return;
         }
         final sep = Platform.isWindows ? ';' : ':';
@@ -576,7 +379,7 @@ class LauncherHomeState extends State<LauncherHome> {
         logger.log("Exited with code: $e");
         instance['playtime'] = (instance['playtime'] ?? 0) + endTime.difference(startTime).inSeconds;
         instanceManager.saveInstance(instance['uuid'] as String, instance); //for some reason it still doesnt want to work :(, im using a function i made before and it still doesnt want to work
-        loadInstances();
+        instanceManager.loadInstances(context);
       });
 
     } catch (e) {
@@ -721,7 +524,7 @@ class LauncherHomeState extends State<LauncherHome> {
                         hoverColor: Colors.blue.withValues(alpha: 0.15),
                         highlightColor: Colors.blue,
                         onTap: () {
-                          _refreshInstance(context, instance);
+                          instanceManager.refreshInstance(context, instance);
                           _activeOverlay?.remove();
                           _activeOverlay = null;
                         },
@@ -887,58 +690,17 @@ class LauncherHomeState extends State<LauncherHome> {
     color: Colors.white12,
   );
 
-  Future<void> _refreshInstance(
-      BuildContext context,
-      Map<String, dynamic> instance,
-      ) async {
-    if (instance['downloading'] == true) return;
 
-    setState(() {
-      instance['downloading'] = true;
-    });
-
-    if (!await instanceManager.instanceExists(instance['uuid'] as String)) return;
-
-    try {
-      await downloadCosmicReachVersion(
-          (instance['version'] as String?) ?? 'latest'
-      );
-
-      if (instance['loader'] == 'Puzzle') {
-        await downloadPuzzleVersion(
-            (instance['Core'] as String?) ?? 'latest',
-            (instance['Cosmic'] as String?) ?? 'latest'
-        );
-      }
-      await instanceManager.saveInstance(instance['uuid'] as String, {...instance, "downloaded":true}..remove('downloading'));
-    } catch (e) {
-      logger.log("Failed to refresh instance $e");
-      if (!context.mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            "Failed to refresh instance ${instance['version']}: $e",
-          ),
-        ),
-      );
-        logger.log(e.toString());
-    } finally {
-      setState(() {
-        instance['downloading'] = false;
-      });
-    }
-  }
 
   bool _checkVersionDownloaded(Map<String, dynamic> instance) {
     if (!File("${getPersistentCacheDir().path}/cosmic_versions/cosmic-reach-client-${resolveLatest("Vanilla","Client", instance['version'] as String)}.jar").existsSync()) {
-      unawaited(_refreshInstance(context, instance));
+      unawaited(instanceManager.refreshInstance(context, instance));
       return false;
     }
     if (instance['loader'] == 'Puzzle') {
       if (!File("${getPersistentCacheDir().path}/puzzle_runtime/${resolveLatest("Puzzle", "Core",instance['Core'] as String? ?? 'latest')}-${resolveLatest("Puzzle", "Cosmic", instance['Cosmic'] as String? ?? 'latest')}.txt").existsSync()) {
         logger.log("Library does not exist");
-        unawaited(_refreshInstance(context, instance));
+        unawaited(instanceManager.refreshInstance(context, instance));
         return false;
       }
     }
@@ -969,7 +731,7 @@ class LauncherHomeState extends State<LauncherHome> {
                 // ignore: unused_element
                 void initState() {
                   super.initState();
-                  loadInstances();
+                  instanceManager.loadInstances(context);
                 }
                 instanceManager.deleteInstance(instance['uuid']);
               });

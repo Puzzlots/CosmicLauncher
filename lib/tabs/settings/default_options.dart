@@ -57,7 +57,7 @@ class _DefaultOptionsPageState extends State<DefaultOptionsPage> {
               ElevatedButton(onPressed: () async {
                 await deleteCaches(folder: 'instances');
                 await Future<dynamic>.delayed(const Duration(milliseconds: 50)); // release handles
-                await CosmicReachLauncher.launcherHomeKey.currentState?.loadInstances();
+                await LauncherHomeState.instanceManager.loadInstances(context);
               }, child: const Text("Purge Instances")),
             ],
           ),

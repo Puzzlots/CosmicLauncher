@@ -92,14 +92,11 @@ class _ModelScreenState extends State<ModelScreen> {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                       decoration: BoxDecoration(
-                        border: Border.all(
-                          color: Colors.grey,
-                          width: 1.5,
-                        ),
+                        color: Colors.white10,
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: const Text(
-                        'Skin Selector',
+                        'Username',
                         style: TextStyle(
                           fontWeight: FontWeight.w500,
                           fontSize: 20,
@@ -122,7 +119,7 @@ class _ModelScreenState extends State<ModelScreen> {
                           Icons.rotate_left_sharp,
                           size: 20,
                         ),
-                        const SizedBox(width: 8), // spacing between icon and text
+                        const SizedBox(width: 8),
                         const Text(
                           'Drag to rotate',
                           style: TextStyle(
@@ -142,5 +139,24 @@ class _ModelScreenState extends State<ModelScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _changeSkin(String assetPath) async {
+    final textureLoader = three.TextureLoader();
+    final newTexture = await textureLoader.fromAsset(assetPath);
+
+    character?.traverse((object) {
+      if (object is three.Mesh) {
+        final material = object.material;
+        if (material != null) {
+          final oldTexture = material.map;
+          material.map = newTexture;
+          newTexture?.magFilter = three.NearestFilter;
+          newTexture?.minFilter = three.NearestFilter;
+          material.needsUpdate = true;
+          oldTexture?.dispose();
+        }
+      }
+    });
   }
 }
