@@ -20,7 +20,7 @@ class CrmmService {
 
       crmmLogger.log("Searching for $query as $type ${versionLocked ? "on Cosmic Reach version $gameVersion" : ''}");
 
-    final url = Uri.https('api.crmm.tech', '/api/search',
+    final url = Uri.https('api.crmods.org', '/api/search',
         {
           'q': query,
           'type': type,
@@ -59,7 +59,7 @@ class CrmmService {
   }
 
   static Future<void> downloadLatestProject(String slug, String type, bool versionLocked, String path, String gameVersion) async {
-    final url = Uri.https('api.crmm.tech', '/api/project/$slug/version/latest/primary-file',
+    final url = Uri.https('api.crmods.org', '/api/project/$slug/version/latest/primary-file',
         {
           if (versionLocked) 'gameVersion': gameVersion,
           if (type == 'mod') 'loader': 'puzzle_loader',

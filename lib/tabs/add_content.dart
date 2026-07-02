@@ -14,8 +14,6 @@ class AddContentTab extends StatefulWidget {
   final Map<String, dynamic> instance;
   final VoidCallback onBack;
 
-
-
   const AddContentTab({
     super.key,
     required this.instance,
@@ -31,7 +29,7 @@ class _AddContentTabState extends State<AddContentTab> with SingleTickerProvider
   String query = '';
   String selectedProjectType = 'mod';
   String sortBy = 'relevance';
-  final List<String> projectTypes = ['Mod',          'Shader','Resource Pack','Datamod'];
+  final List<String> projectTypes = ['Mod','Shader','Resource Pack','Datamod'];
 
   bool locked = true;
 

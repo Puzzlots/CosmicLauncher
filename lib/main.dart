@@ -7,10 +7,12 @@ import 'package:dropdown_search/dropdown_search.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:nanoid/nanoid.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path/path.dart' as p;
 import 'package:polaris/tabs/add_content.dart';
+import 'package:polaris/tabs/model_screen.dart';
 import 'package:polaris/tabs/settings/default_options.dart';
 import 'package:polaris/tabs/settings/java_installs.dart';
 import 'package:polaris/tabs/settings/resource_management.dart';
@@ -57,6 +59,7 @@ void main(List<String> arguments) async {
   }
 
   logger.log("Logging has began");
+  // debugPaintSizeEnabled = true;
   runApp(const CosmicReachLauncher());
   }
 
@@ -170,7 +173,7 @@ class LauncherHomeState extends State<LauncherHome> {
 
     final resolvedInitialDir = initialDir != null && Directory(initialDir).existsSync() ? initialDir : null;
 
-    final result = await FilePicker.platform.getDirectoryPath(
+    final result = await FilePicker.getDirectoryPath(
       dialogTitle: "Select instance folders",
       lockParentWindow: true,
       initialDirectory: resolvedInitialDir,
@@ -326,7 +329,7 @@ class LauncherHomeState extends State<LauncherHome> {
               .toList();
         },
         selectedItem: selected,
-        onChanged: (v) {
+        onSaved: (v) {
           if (v != null) onChanged(v);
         },
         popupProps: const PopupProps.menu(showSearchBox: true),
@@ -475,7 +478,10 @@ class LauncherHomeState extends State<LauncherHome> {
     }
 
     if (!_checkVersionDownloaded(instance)) return;
-    if (instance['downloaded'] == false) unawaited(_refreshInstance(context, instance));
+    if (instance['downloaded'] == false) {
+      unawaited(_refreshInstance(context, instance));
+      return;
+    }
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text("Launching ${instance['name']}...")),
@@ -494,17 +500,17 @@ class LauncherHomeState extends State<LauncherHome> {
 
     switch (loader) {
       case 'Puzzle': {
-        final libDir = Directory("${getPersistentCacheDir().path}/puzzle_runtime/${resolveLatest('Puzzle', 'Core', (instance['Core'] as String?) ?? 'latest')}-${resolveLatest('Puzzle', 'Cosmic', (instance['Cosmic'] as String?) ?? 'latest')}");
-        if (!libDir.existsSync()) {
-          logger.log("Folder does not exist");
+        final libFile = File("${getPersistentCacheDir().path}/puzzle_runtime/${resolveLatest('Puzzle', 'Core', (instance['Core'] as String?) ?? 'latest')}-${resolveLatest('Puzzle', 'Cosmic', (instance['Cosmic'] as String?) ?? 'latest')}.txt");
+        if (!libFile.existsSync()) {
+          logger.log("Library file does not exist");
+          unawaited(_refreshInstance(context, instance));
           return;
-        };
+        }
         final sep = Platform.isWindows ? ';' : ':';
-        var jars = libDir
-            .listSync()
-            .whereType<File>()
-            .where((f) => f.path.endsWith('.jar'))
-            .map((f) => f.path)
+        var jars = libFile
+            .readAsLinesSync()
+            .where((f) => f.toString().endsWith('.jar'))
+            .map((f) => f.toString())
             .join(sep);
 
         jars += "$sep${getPersistentCacheDir().path}/cosmic_versions/cosmic-reach-client-${resolveLatest('Vanilla','Client', instance['version'] as String)}.jar";
@@ -564,9 +570,10 @@ class LauncherHomeState extends State<LauncherHome> {
 
       runningInstances.value++;
 
-      await process.exitCode.then((_) {
+      await process.exitCode.then((e) {
         final endTime = DateTime.now().toUtc();
         runningInstances.value--;
+        logger.log("Exited with code: $e");
         instance['playtime'] = (instance['playtime'] ?? 0) + endTime.difference(startTime).inSeconds;
         instanceManager.saveInstance(instance['uuid'] as String, instance); //for some reason it still doesnt want to work :(, im using a function i made before and it still doesnt want to work
         loadInstances();
@@ -890,6 +897,8 @@ class LauncherHomeState extends State<LauncherHome> {
       instance['downloading'] = true;
     });
 
+    if (!await instanceManager.instanceExists(instance['uuid'] as String)) return;
+
     try {
       await downloadCosmicReachVersion(
           (instance['version'] as String?) ?? 'latest'
@@ -901,7 +910,6 @@ class LauncherHomeState extends State<LauncherHome> {
             (instance['Cosmic'] as String?) ?? 'latest'
         );
       }
-      if (!await instanceManager.instanceExists(instance['uuid'] as String)) return;
       await instanceManager.saveInstance(instance['uuid'] as String, {...instance, "downloaded":true}..remove('downloading'));
     } catch (e) {
       logger.log("Failed to refresh instance $e");
@@ -924,12 +932,13 @@ class LauncherHomeState extends State<LauncherHome> {
 
   bool _checkVersionDownloaded(Map<String, dynamic> instance) {
     if (!File("${getPersistentCacheDir().path}/cosmic_versions/cosmic-reach-client-${resolveLatest("Vanilla","Client", instance['version'] as String)}.jar").existsSync()) {
-      _refreshInstance(context, instance);
+      unawaited(_refreshInstance(context, instance));
       return false;
     }
     if (instance['loader'] == 'Puzzle') {
-      if (!Directory("${getPersistentCacheDir().path}/puzzle_runtime/${resolveLatest("Puzzle", "Core",instance['Core'] as String? ?? 'latest')}-${resolveLatest("Puzzle", "Cosmic", instance['Cosmic'] as String? ?? 'latest')}").existsSync()) {
-        _refreshInstance(context, instance);
+      if (!File("${getPersistentCacheDir().path}/puzzle_runtime/${resolveLatest("Puzzle", "Core",instance['Core'] as String? ?? 'latest')}-${resolveLatest("Puzzle", "Cosmic", instance['Cosmic'] as String? ?? 'latest')}.txt").existsSync()) {
+        logger.log("Library does not exist");
+        unawaited(_refreshInstance(context, instance));
         return false;
       }
     }
@@ -1543,13 +1552,7 @@ class LauncherHomeState extends State<LauncherHome> {
                                       );
 
                                     case LauncherTab.skins:
-                                      return Center(
-                                          child: Text(
-                                            "Skins tab\n\nComing soon...",
-                                            style:
-                                            Theme.of(context).textTheme.titleMedium,
-                                          )
-                                      );
+                                      return ModelScreen();
 
                                     case LauncherTab.addContent:
                                       return AddContentTab(
@@ -1703,6 +1706,12 @@ class _InstanceCenterIcon extends StatelessWidget {
           icon: const Icon(Icons.play_arrow, size: 48),
           color: Theme.of(context).colorScheme.primary,
           onPressed: onPlay,
+        );
+      case InstanceVisualState.downloading:
+        return const Icon(
+          Icons.download,
+          size: 48,
+          color: Colors.blueAccent,
         );
 
       default:

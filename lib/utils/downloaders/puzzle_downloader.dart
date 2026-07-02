@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:polaris/utils/cache_utils.dart';
+import 'package:polaris/utils/download_utils.dart';
 import 'package:polaris/utils/general_utils.dart';
 import 'package:polaris/utils/version_cache.dart';
 
@@ -13,7 +14,7 @@ Future<void> downloadPuzzleVersion(
     ) async {
   coreVersion = resolveLatest('Puzzle', 'Core', coreVersion);
   cosmicVersion = resolveLatest('Puzzle', 'Cosmic', cosmicVersion);
-  final libDir = Directory("${getPersistentCacheDir().path}/puzzle_runtime/$coreVersion-$cosmicVersion");
+  final libDir = Directory("${getPersistentCacheDir().path}\\puzzle_runtime");
   await libDir.create(recursive: true);
 
   final coreClientJar = "puzzle-loader-core-$coreVersion-client.jar";
@@ -48,30 +49,60 @@ Future<void> downloadPuzzleVersion(
     ...(cosmicDepsData['client'] as List),
   ].where((e) => e['type'] == 'implementation').toList();
 
+  final libFile = File("${libDir.path}\\$coreVersion-$cosmicVersion.txt");
+  await libFile.parent.create(recursive: true);
+  if (!await libFile.exists()) {
+    await libFile.create();
+  }
+
+  for (List<String> dep in urls) {
+    downloadLogger.log("Checking if ${dep[0]} is in library list");
+    String filePath = "${libDir.path}\\${dep[0]}" ;
+    if (!libFile.readAsLinesSync().contains(filePath)) await libFile.writeAsString("$filePath\n", mode: FileMode.append);
+  }
+
   for (final dep in allDeps) {
     final group = dep['groupId'] as String;
     final artifact = dep['artifactId'] as String;
     final version = dep['version'] as String;
     final fileName = "$artifact-$version.jar";
-    final dir = "${libDir.path}/$fileName";
-
-    final file = File(dir);
-    if (await file.exists()) continue;
-    await findAndCopyFile(searchDir: Directory(libDir.path), fileName: fileName, destinationDir: Directory(dir));
+    final dir = "${libDir.path}\\$fileName";
 
     bool downloaded = false;
+    final file = File(dir);
+    downloadLogger.log("Checking if $fileName exists");
+    if (file.existsSync()) {
+      downloadLogger.log("$fileName exists");
+      if ((await libFile.readAsLines()).contains(dir)) {
+        downloadLogger.log("$fileName is in library list");
+        downloaded = true;
+      } else {
+        downloadLogger.log("$fileName was not in library list");
+        await libFile.writeAsString(
+            "$dir\n",
+            mode: FileMode.append
+        );
+        downloaded = true;
+      }
+    }
+    if (downloaded) continue;
+
 
     for (final repo in repos) {
       final url = buildDependencyUrlForRepo(repo, group, artifact, version);
 
       if (await tryDownload(url, file)) {
         downloaded = true;
+        await libFile.writeAsString(
+            "$dir\n",
+            mode: FileMode.append
+        );
         break;
       }
     }
 
     if (!downloaded) {
-        downloaderLogger.log("failed to download $group:$artifact:$version");
+      downloaderLogger.log("failed to download $group:$artifact:$version");
     }
   }
 }
@@ -90,7 +121,7 @@ Future<void> downloadJars(List<List<String>> files, Directory libDir) async {
     final url = pair[1];
     final file = File("${libDir.path}/$fileName");
     if (await file.exists()) continue;
-      downloaderLogger.log("Downloading $url");
+    downloaderLogger.log("Downloading $url");
     await tryDownload(url, file);
   }
 }

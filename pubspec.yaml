@@ -8,29 +8,32 @@ environment:
 
 dependencies:
   auto_size_text: ^3.0.0
-  cupertino_icons: ^1.0.8
-  fluent_ui: ^4.13.0
+  cupertino_icons: ^1.0.9
+  fluent_ui: ^4.16.0
   fluentui_system_icons: ^1.1.273
   flutter:
     sdk: flutter
   flutter_layout_grid: ^2.0.8
-  flutter_riverpod: ^3.2.1
-  math_expressions: ^2.7.0
+  flutter_riverpod: ^3.3.2
+  math_expressions: ^3.1.0
   window_size: 
     git:
       url: https://github.com/google/flutter-desktop-embedding.git
       path: plugins/window_size
-  dropdown_search: ^6.0.2
-  uuid: ^4.5.2
+  dropdown_search: ^7.0.0
+  uuid: ^4.5.3
   http: ^1.6.0
   path: ^1.9.1
   nanoid: ^1.0.0
-  archive: ^4.0.7
-  flutter_secure_storage: ^10.0.0
-  package_info_plus: ^9.0.0
-  file_picker: ^10.3.10
+  archive: ^4.0.9
+  flutter_secure_storage: ^10.3.1
+  package_info_plus: ^9.0.1
+  file_picker: ^11.0.2
   mime: ^2.0.0
   args: ^2.7.0
+  three_js: 0.2.4
+  three_js_advanced_loaders: 0.2.4
+
 
 dev_dependencies:
   analysis_defaults:
@@ -39,3 +42,5 @@ dev_dependencies:
     sdk: flutter
 flutter:
   uses-material-design: true
+  assets:
+    - assets/models/

@@ -17,7 +17,7 @@ Future<void> downloadCosmicReachVersion(
   await savePath.create(recursive: true);
   final url = "https://github.com/PuzzlesHQ/CRArchive/releases/download/$version/$artifact";
 
-  if (File("${savePath.toString()}/$artifact").existsSync()) return;
+  if (File("${savePath.path}/$artifact").existsSync()) return;
   try {
     final resp = await http.get(Uri.parse(url));
 

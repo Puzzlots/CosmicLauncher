@@ -6,10 +6,13 @@
 
 #include "generated_plugin_registrant.h"
 
+#include <flutter_angle/flutter_angle_plugin.h>
 #include <flutter_secure_storage_windows/flutter_secure_storage_windows_plugin.h>
 #include <window_size/window_size_plugin.h>
 
 void RegisterPlugins(flutter::PluginRegistry* registry) {
+  FlutterAnglePluginRegisterWithRegistrar(
+      registry->GetRegistrarForPlugin("FlutterAnglePlugin"));
   FlutterSecureStorageWindowsPluginRegisterWithRegistrar(
       registry->GetRegistrarForPlugin("FlutterSecureStorageWindowsPlugin"));
   WindowSizePluginRegisterWithRegistrar(
