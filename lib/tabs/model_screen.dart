@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
+import 'dart:typed_data';
+import 'dart:ui' as ui;
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -47,6 +49,8 @@ class _ModelScreenState extends State<ModelScreen> {
   late double height;
 
   late List<Skin> _skins;
+  final Map<String, ui.Image> _skinThumbs = {};
+  bool _generatingThumbs = false;
 
   @override
   void initState() {
@@ -128,6 +132,8 @@ class _ModelScreenState extends State<ModelScreen> {
         );
       }
     }
+
+    await _generateSkinThumbnails();
 
     threeJs.addAnimationEvent((dt) {
       final clampedDt = dt.clamp(0.0, 1 / 30);
@@ -314,6 +320,7 @@ class _ModelScreenState extends State<ModelScreen> {
 
   Widget _buildSkinCard(BuildContext context, Skin skin) {
     bool hovering = false;
+    final preview = _skinThumbs[skin.file.path];
 
     return KeyedSubtree(
       child: StatefulBuilder(
@@ -346,6 +353,12 @@ class _ModelScreenState extends State<ModelScreen> {
                   ),
                 ),
                 padding: const EdgeInsets.all(12),
+                child: preview == null
+                    ? const Center(child: CircularProgressIndicator(strokeWidth: 2))
+                    : RawImage(
+                  image: preview,
+                  fit: BoxFit.contain,
+                ),
               ),
             ),
           );
@@ -491,6 +504,96 @@ class _ModelScreenState extends State<ModelScreen> {
     }
 
     return skinList;
+  }
+
+  Future<void> _generateSkinThumbnails() async {
+    if (_generatingThumbs || character == null) return;
+    _generatingThumbs = true;
+
+    for (final skin in _skins) {
+      final image = await _renderSkinThumbnail(skin);
+      if (!mounted) return;
+
+      setState(() {
+        _skinThumbs[skin.file.path] = image;
+      });
+    }
+    _generatingThumbs = false;
+  }
+
+  Future<ui.Image> _renderSkinThumbnail(Skin skin) async {
+    const width = 256;
+    final height = cache_utils.toInt(width / (3/4), width);
+
+    final scene = three.Scene();
+    scene.background = null;
+    scene.add(three.AmbientLight(0xffffff, 3));
+
+    final camera = three.PerspectiveCamera(35, 1, 0.01, 100);
+    camera.position.setValues(0, 1, 2);
+
+    final preview = character!.clone(true);
+    preview.rotation.y = math.pi;
+    scene.add(preview);
+
+    final isDefaultSkin = skin.file.path == _defaultSkinFile.path;
+    final newTexture = isDefaultSkin ? null : await textureLoader.fromFile(skin.file);
+
+    final defaultTexture = _defaultMaterialMaps.values.whereType<three.Texture>().firstOrNull;
+    if (newTexture != null) {
+      _copyTextureSettings(defaultTexture, newTexture);
+      newTexture.needsUpdate = true;
+    }
+
+    preview.traverse((object) {
+      if (object is three.Mesh) {
+        final material = object.material;
+        if (material != null) {
+          material.map = isDefaultSkin ? defaultTexture : newTexture;
+          material.map?.needsUpdate = true;
+          material.needsUpdate = true;
+        }
+      }
+    });
+
+    final target = three.WebGLRenderTarget(width, height);
+    final buffer = three.Uint8Array(width * height * 4);
+
+    final oldTarget = threeJs.renderer!.getRenderTarget();
+    final oldClearAlpha = threeJs.renderer!.getClearAlpha();
+
+    threeJs.renderer!.setRenderTarget(target);
+    threeJs.renderer!.setClearColor(three.Color.fromHex32(0x000000), 0);
+    threeJs.renderer!.setClearAlpha(0);
+    threeJs.renderer!.clear();
+    threeJs.renderer!.render(scene, camera);
+    threeJs.renderer!.readRenderTargetPixels(target, 0, 0, width, height, buffer);
+
+    threeJs.renderer!.setRenderTarget(oldTarget);
+    threeJs.renderer!.setClearAlpha(oldClearAlpha);
+
+    target.dispose();
+    newTexture?.dispose();
+
+    return _rgbaToUiImage(buffer.toDartList(), width, height);
+  }
+
+  Future<ui.Image> _rgbaToUiImage(Uint8List pixels, int width, int height) async {
+    final flipped = Uint8List(pixels.length);
+    final rowBytes = width * 4;
+
+    for (var y = 0; y < height; y++) {
+      final srcOffset = y * rowBytes;
+      final dstOffset = (height - 1 - y) * rowBytes;
+
+      flipped.setRange(dstOffset, dstOffset + rowBytes, pixels, srcOffset);
+    }
+
+    final Completer<ui.Image> completer = Completer<ui.Image>();
+
+    ui.decodeImageFromPixels(flipped, width, height, ui.PixelFormat.rgba8888, (img) {completer.complete(img);},);
+
+    return completer.future;
   }
 }
 
