@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:polaris/main.dart' show title, installPath;
 
-import '../main.dart' show title; // default app title
 import 'cache_utils.dart'; // your PersistentPrefs
 
 /// ----------------- Persistent Checkbox ----------------- ///

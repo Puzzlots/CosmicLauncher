@@ -40,6 +40,25 @@ Directory getPersistentCacheDir({String installPath = installPath}) {
   return dir;
 }
 
+Directory getCosmicReachDir() {
+  late final String base;
+
+  if (Platform.isWindows) {
+    base = Platform.environment['LOCALAPPDATA'] ??
+        Directory.current.path;
+  } else if (Platform.isMacOS) {
+    base = p.join(Platform.environment['HOME'] ?? Directory.current.path,
+        'Library', 'Application Support');
+  } else if (Platform.isLinux) {
+    base = Platform.environment['XDG_DATA_HOME'] ??
+        p.join(Platform.environment['HOME'] ?? Directory.current.path,
+            '.local', 'share');
+  } else {
+    base = Directory.current.path;
+  }
+  return Directory(p.join(base, "cosmic-reach"));
+}
+
 Future<void> deleteCaches({String folder = 'caches', String installPath = installPath}) async {
   final baseDir = getPersistentCacheDir(installPath: installPath);
   final cacheDir = Directory(p.join(baseDir.path, folder));

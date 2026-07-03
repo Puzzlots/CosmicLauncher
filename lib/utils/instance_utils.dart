@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:dropdown_search/dropdown_search.dart';
-import 'package:fluent_ui/fluent_ui.dart' hide showDialog;
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 import 'package:polaris/utils/version_cache.dart';
@@ -110,7 +109,7 @@ class InstanceManager {
           },
         ));
     LauncherHomeState.instances = await LauncherHomeState.instanceManager.loadAllInstances();
-    CosmicReachLauncher.launcherHomeKey.currentState?.setState(() {}); // trigger UI update
+    CosmicReachLauncher.launcherHomeKey.currentState?.setState(() {});
 
     for (var instance in LauncherHomeState.instances) {if (instance['downloaded'] != true) {
       if (!context.mounted) return;
@@ -275,7 +274,7 @@ class InstanceManager {
                       DropdownButtonFormField<String>(
                         initialValue: selectedLoader,
                         items: loaders
-                            .map((v) => DropdownMenuItem(value: v, child: Text(v as String)))
+                            .map((v) => DropdownMenuItem(value: v, child: Text(v)))
                             .toList(),
                         onChanged: (value) {
                           if (value != null) setState(() => selectedLoader = value);

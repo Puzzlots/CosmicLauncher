@@ -3,11 +3,8 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:args/args.dart';
-import 'package:dropdown_search/dropdown_search.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
 import 'package:nanoid/nanoid.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path/path.dart' as p;
@@ -19,8 +16,6 @@ import 'package:polaris/tabs/settings/resource_management.dart';
 import 'package:polaris/utils/cache_utils.dart';
 import 'package:polaris/utils/credentials.dart';
 import 'package:polaris/utils/crmm/crmm_service.dart';
-import 'package:polaris/utils/downloaders/cosmic_downloader.dart';
-import 'package:polaris/utils/downloaders/puzzle_downloader.dart';
 import 'package:polaris/utils/general_utils.dart';
 import 'package:polaris/utils/instance_utils.dart';
 import 'package:polaris/utils/logger.dart';
@@ -54,12 +49,13 @@ void main(List<String> arguments) async {
   await Logger.init();
   logger = Logger.logger("Main");
 
-  if (verbose || kDebugMode) {
+  if (verbose) {
     await Logger.tailLogs();
   }
 
   logger.log("Logging has began");
   // debugPaintSizeEnabled = true;
+  await ItchSecureStore.init();
   runApp(const CosmicReachLauncher());
   }
 
@@ -137,6 +133,7 @@ class LauncherHomeState extends State<LauncherHome> {
     details['uuid'] = id;
     await instanceManager.saveInstance(id, details);
 
+    if (!mounted) return;
     await instanceManager.loadInstances(context);
   }
 
@@ -183,6 +180,7 @@ class LauncherHomeState extends State<LauncherHome> {
     }
 
     if (discovered.isEmpty) {
+      if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("No instances found")),
       );
@@ -268,6 +266,7 @@ class LauncherHomeState extends State<LauncherHome> {
 
       await manager.saveInstance(id, data);
     }
+    if (!mounted) return;
     await instanceManager.loadInstances(context);
   }
 
@@ -379,6 +378,7 @@ class LauncherHomeState extends State<LauncherHome> {
         logger.log("Exited with code: $e");
         instance['playtime'] = (instance['playtime'] ?? 0) + endTime.difference(startTime).inSeconds;
         instanceManager.saveInstance(instance['uuid'] as String, instance); //for some reason it still doesnt want to work :(, im using a function i made before and it still doesnt want to work
+        if (!mounted) return;
         instanceManager.loadInstances(context);
       });
 
@@ -752,6 +752,7 @@ class LauncherHomeState extends State<LauncherHome> {
     final existing = await ItchSecureStore.loadKey();
     final controller = TextEditingController(text: existing ?? "");
 
+    if (!context.mounted) return;
     await showDialog<dynamic>(
       context: context,
       barrierDismissible: false,
@@ -787,6 +788,7 @@ class LauncherHomeState extends State<LauncherHome> {
                     if (key.isEmpty) return;
 
                     await ItchSecureStore.saveKey(key);
+                    if (!context.mounted) return;
                     Navigator.of(ctx).pop();
                   },
                   child: const Text("Save"),
@@ -1035,7 +1037,7 @@ class LauncherHomeState extends State<LauncherHome> {
                 //Library tab
                 IconButton(
                   iconSize: 32,
-                  icon: Icon(Icons.library_books),
+                  icon: Icon(Icons.menu_book_sharp),
                   color: activeTab == LauncherTab.library
                       ? Theme.of(context).colorScheme.primary
                       : Colors.white,
@@ -1046,12 +1048,12 @@ class LauncherHomeState extends State<LauncherHome> {
                 //Skins tab
                 IconButton(
                   iconSize: 32,
-                  icon: Icon(Icons.person),
+                  icon: Icon(Icons.checkroom),
                   color: activeTab == LauncherTab.skins
                       ? Theme.of(context).colorScheme.primary
                       : Colors.white,
                   tooltip: "Skins",
-                  onPressed: () => setState(() => activeTab = LauncherTab.skins),//TODO do skins tab
+                  onPressed: () => setState(() => activeTab = LauncherTab.skins),//TODO do skins tab (WIP)
                 ),
 
                 //Quick launch buttons
@@ -1092,6 +1094,16 @@ class LauncherHomeState extends State<LauncherHome> {
 
                 const Spacer(),
 
+                //Itch Key button
+                IconButton(
+                  iconSize: 32,
+                  icon: const Icon(Icons.key),
+                  tooltip: "Itch Key",
+                  onPressed: () {
+                    _signIn(context);
+                  },
+                ),
+
                 //Settings button
                 IconButton(
                   iconSize: 32,
@@ -1099,16 +1111,6 @@ class LauncherHomeState extends State<LauncherHome> {
                   tooltip: "Settings",
                   onPressed: () {
                     _openSettings();
-                  },
-                ),
-
-                //Login button
-                IconButton(
-                  iconSize: 32,
-                  icon: const Icon(Icons.login),
-                  tooltip: "Sign In",
-                  onPressed: () {
-                    _signIn(context);
                   },
                 ),
                 const SizedBox(height: 16),
@@ -1132,9 +1134,22 @@ class LauncherHomeState extends State<LauncherHome> {
                         style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                       ),
                       Center(
-                        child: Text(
-                          'Version $version',
-                          style: TextStyle(fontSize: 15, fontWeight: FontWeight.normal, color: Colors.grey),
+                        child: Row(
+                            children:[
+                              Text(
+                                'Version $version',
+                                style: TextStyle(fontSize: 15, fontWeight: FontWeight.normal, color: Colors.grey),
+                              ),
+                              // TODO: make this function
+                              // SizedBox(width: 5),
+                              // Tooltip(
+                              //     message: "A new version is available",
+                              //     child: Icon(
+                              //       Icons.download_sharp,
+                              //       color: Theme.of(context).colorScheme.primary,
+                              //     )
+                              // )
+                            ]
                         ),
                       ),
                       ValueListenableBuilder<int>(

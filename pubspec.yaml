@@ -34,7 +34,6 @@ dependencies:
   three_js: 0.2.4
   three_js_advanced_loaders: 0.2.4
 
-
 dev_dependencies:
   analysis_defaults:
     path: analysis_defaults

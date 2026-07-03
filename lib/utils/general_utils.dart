@@ -1,6 +1,8 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as p;
 
 import '../main.dart';
@@ -81,4 +83,21 @@ Future<bool> findAndCopyFile({
     }
   }
   return false;
+}
+
+Future<String?> getUsername(String? apiKey) async {
+  if (apiKey == null) return null;
+  final response = await http.get(
+    Uri.parse('https://api.itch.io/profile'),
+    headers: {
+      'Authorization': 'Bearer $apiKey',
+    },
+  );
+
+  if (response.statusCode != 200) {
+    return null;
+  }
+
+  final json = jsonDecode(response.body);
+  return json['user']['username'] as String;
 }
