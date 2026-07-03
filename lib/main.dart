@@ -778,20 +778,36 @@ class LauncherHomeState extends State<LauncherHome> {
                 ),
               ),
               actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(ctx).pop(),
-                  child: const Text("Cancel"),
-                ),
-                TextButton(
-                  onPressed: () async {
-                    final key = controller.text.trim();
-                    if (key.isEmpty) return;
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: Row(
+                    children: [
+                      TextButton(
+                        onPressed: () {
+                          Uri.parse("https://itch.io/user/settings/api-keys")
+                              .openInBrowser();
+                          Navigator.of(ctx).pop();
+                        },
+                        child: const Text("Take me there"),
+                      ),
+                      const Spacer(),
+                      TextButton(
+                        onPressed: () => Navigator.of(ctx).pop(),
+                        child: const Text("Cancel"),
+                      ),
+                      TextButton(
+                        onPressed: () async {
+                          final key = controller.text.trim();
+                          if (key.isEmpty) return;
 
-                    await ItchSecureStore.saveKey(key);
-                    if (!context.mounted) return;
-                    Navigator.of(ctx).pop();
-                  },
-                  child: const Text("Save"),
+                          await ItchSecureStore.saveKey(key);
+                          if (!ctx.mounted) return;
+                          Navigator.of(ctx).pop();
+                        },
+                        child: const Text("Save"),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             );

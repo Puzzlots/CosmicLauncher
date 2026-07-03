@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as p;
+import 'package:url_launcher/url_launcher.dart';
 
 import '../main.dart';
 import 'os_utils.dart';
@@ -94,6 +95,14 @@ extension ListExtension on List {
   List prepend(dynamic value) {
     insert(0, value);
     return this;
+  }
+}
+
+extension UriExtension on Uri {
+  Future<void> openInBrowser() async {
+    if (!await launchUrl(this, mode: LaunchMode.externalApplication,)) {
+      throw Exception('Could not launch $this');
+    }
   }
 }
 
