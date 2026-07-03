@@ -40,8 +40,12 @@ class _ModelScreenState extends State<ModelScreen> {
   List<three.AnimationAction> _actions = [];
   three.AnimationAction? _currentAction;
   final textureLoader = three.TextureLoader();
-  final skinDir = Directory(p.join(cache_utils.getCosmicReachDir().path, "skins"));
-  final currentSkinJSONFile = File(p.join(cache_utils.getCosmicReachDir().path, "skins", "current.json"));
+  final skinDir = Directory(
+    p.join(cache_utils.getCosmicReachDir().path, "skins"),
+  );
+  final currentSkinJSONFile = File(
+    p.join(cache_utils.getCosmicReachDir().path, "skins", "current.json"),
+  );
   final Map<three.Material, three.Texture?> _defaultMaterialMaps = {};
   three.Texture? _activeSkinTexture;
 
@@ -118,8 +122,8 @@ class _ModelScreenState extends State<ModelScreen> {
 
         _mixer = three.AnimationMixer(character!);
 
-        _actions = gltf.animations
-        !.map((clip) => _mixer!.clipAction(clip as three.AnimationClip))
+        _actions = gltf.animations!
+            .map((clip) => _mixer!.clipAction(clip as three.AnimationClip))
             .whereType<three.AnimationAction>()
             .toList();
 
@@ -128,7 +132,7 @@ class _ModelScreenState extends State<ModelScreen> {
 
         Timer.periodic(
           const Duration(seconds: 8),
-              (_) => _switchToRandomAnimation(),
+          (_) => _switchToRandomAnimation(),
         );
       }
     }
@@ -140,7 +144,7 @@ class _ModelScreenState extends State<ModelScreen> {
       _mixer?.update(clampedDt);
       character?.rotation.y = _rotationY;
 
-      final renderAspect =  width / height;
+      final renderAspect = width / height;
       if ((threeJs.camera.aspect - renderAspect).abs() > 0.001) {
         threeJs.camera.aspect = renderAspect;
         threeJs.camera.updateProjectionMatrix();
@@ -164,105 +168,100 @@ class _ModelScreenState extends State<ModelScreen> {
     _currentAction = next;
   }
 
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title:
-      Row(
+      appBar: AppBar(
+        title: Row(
           children: [
-            const Text('Skin Selector',
-              style: TextStyle(
-                  fontWeight: FontWeight.w500,
-                  fontSize: 20
-              ),
+            const Text(
+              'Skin Selector',
+              style: TextStyle(fontWeight: FontWeight.w500, fontSize: 20),
             ),
             SizedBox.fromSize(size: Size(10, 10)),
             Tooltip(
-                message: "Player flickering? Set the app to use a dedicated GPU",
-                child:
-                Icon(
-                    color: Colors.white54,
-                    Icons.info
-                )
-            )
-          ]
-      )
+              message: "Player flickering? Set the app to use a dedicated GPU",
+              child: Icon(color: Colors.white54, Icons.info),
+            ),
+          ],
+        ),
       ),
       body: Row(
         children: [
           Expanded(
-              flex: 1,
-              child:
-              Column(
-                  children:[
-                    SizedBox.fromSize(size: Size(0, 30)),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                      decoration: BoxDecoration(
-                        color: Colors.white10,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Text(
-                        ItchSecureStore.username,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w500,
-                          fontSize: 20,
-                        ),
+            flex: 1,
+            child: Column(
+              children: [
+                SizedBox.fromSize(size: Size(0, 30)),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 10,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white10,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    ItchSecureStore.username,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w500,
+                      fontSize: 20,
+                    ),
+                  ),
+                ),
+                Expanded(
+                  flex: 1,
+                  child: Listener(
+                    onPointerMove: (event) {
+                      _rotationY += event.delta.dx * 0.01;
+                    },
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        width = constraints.maxWidth;
+                        height = constraints.maxHeight;
+                        return threeJs.build();
+                      },
+                    ),
+                  ),
+                ),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.rotate_left_sharp,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 8),
+                    const Text(
+                      'Drag to rotate',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w500,
+                        fontSize: 23,
                       ),
                     ),
-                    Expanded(
-                      flex: 1,
-                      child: Listener(
-                          onPointerMove: (event) {
-                            _rotationY += event.delta.dx * 0.01;
-                          },
-                          child: LayoutBuilder(
-                            builder: (context, constraints) {
-                              width = constraints.maxWidth;
-                              height = constraints.maxHeight;
-                              return threeJs.build();
-                            },
-                          )
-                      ),
-                    ),
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(
-                          Icons.rotate_left_sharp,
-                          size: 20,
-                        ),
-                        const SizedBox(width: 8),
-                        const Text(
-                          'Drag to rotate',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w500,
-                            fontSize: 23,
-                          ),
-                        ),
-                      ],
-                    ),
-                    SizedBox.fromSize(size: Size(0, 30)),
-                  ]
-              )
+                  ],
+                ),
+                SizedBox.fromSize(size: Size(0, 30)),
+              ],
+            ),
           ),
           Expanded(
-              flex: 3,
-              child: GridView.builder(
-                itemCount: _skins.length + 1,
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 5,
-                  mainAxisSpacing: 4,
-                  crossAxisSpacing: 4,
-                  childAspectRatio: 3/4,
-                ),
-                itemBuilder: (context, index) {
-                  if (index == 0) return _buildAddSkinCard(context);
-                  final skin = _skins[index - 1];
-                  return _buildSkinCard(context, skin);
-                },
-              )
+            flex: 3,
+            child: GridView.builder(
+              itemCount: _skins.length + 1,
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 5,
+                mainAxisSpacing: 4,
+                crossAxisSpacing: 4,
+                childAspectRatio: 3 / 4,
+              ),
+              itemBuilder: (context, index) {
+                if (index == 0) return _buildAddSkinCard(context);
+                final skin = _skins[index - 1];
+                return _buildSkinCard(context, skin);
+              },
+            ),
           ),
         ],
       ),
@@ -281,15 +280,21 @@ class _ModelScreenState extends State<ModelScreen> {
             child: GestureDetector(
               onTapDown: (details) async => await _importSkin(),
               child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 150),
-                  decoration: BoxDecoration(
-                    color: hovering ? Theme.of(context).colorScheme.outline.withAlpha(50) : Color(0xFF1E1E1E),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(
-                        color:  hovering ? Theme.of(context).colorScheme.outline : Theme.of(context).colorScheme.outlineVariant.withAlpha(40)
-                    ),
+                duration: const Duration(milliseconds: 150),
+                decoration: BoxDecoration(
+                  color: hovering
+                      ? Theme.of(context).colorScheme.outline.withAlpha(50)
+                      : Color(0xFF1E1E1E),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: hovering
+                        ? Theme.of(context).colorScheme.outline
+                        : Theme.of(
+                            context,
+                          ).colorScheme.outlineVariant.withAlpha(40),
                   ),
-                  padding: const EdgeInsets.all(12),
+                ),
+                padding: const EdgeInsets.all(12),
                 child: Center(
                   child: Column(
                     mainAxisSize: MainAxisSize.max,
@@ -309,7 +314,7 @@ class _ModelScreenState extends State<ModelScreen> {
                       ),
                     ],
                   ),
-                )
+                ),
               ),
             ),
           );
@@ -326,7 +331,8 @@ class _ModelScreenState extends State<ModelScreen> {
       child: StatefulBuilder(
         builder: (context, setHover) {
           final visualState = hovering
-              ? SkinVisualState.hover : skin.selected
+              ? SkinVisualState.hover
+              : skin.selected
               ? SkinVisualState.selected
               : SkinVisualState.idle;
 
@@ -340,25 +346,35 @@ class _ModelScreenState extends State<ModelScreen> {
                 decoration: BoxDecoration(
                   color: switch (visualState) {
                     SkinVisualState.idle => Color(0xFF1E1E1E),
-                    SkinVisualState.hover => Theme.of(context).colorScheme.secondary.withAlpha(50),
-                    SkinVisualState.selected => Theme.of(context).colorScheme.primaryContainer.withAlpha(50),
+                    SkinVisualState.hover => Theme.of(
+                      context,
+                    ).colorScheme.secondary.withAlpha(50),
+                    SkinVisualState.selected => Theme.of(
+                      context,
+                    ).colorScheme.primaryContainer.withAlpha(50),
                   },
                   borderRadius: BorderRadius.circular(10),
                   border: Border.all(
                     color: switch (visualState) {
                       SkinVisualState.idle => Colors.transparent,
-                      SkinVisualState.hover => Theme.of(context).colorScheme.secondary,
-                      SkinVisualState.selected => Theme.of(context).colorScheme.primary,
-                    }
+                      SkinVisualState.hover => Theme.of(
+                        context,
+                      ).colorScheme.secondary,
+                      SkinVisualState.selected => Theme.of(
+                        context,
+                      ).colorScheme.primary,
+                    },
                   ),
                 ),
                 padding: const EdgeInsets.all(12),
                 child: preview == null
-                    ? const Center(child: CircularProgressIndicator(strokeWidth: 2))
+                    ? const Center(
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
                     : RawImage(
-                  image: preview,
-                  fit: BoxFit.contain,
-                ),
+                        image: preview,
+                        fit: BoxFit.contain,
+                      ),
               ),
             ),
           );
@@ -383,7 +399,13 @@ class _ModelScreenState extends State<ModelScreen> {
       final fileName = p.basename(file.path);
       var destination = File(p.join(skinDir.path, fileName));
 
-      while (await destination.exists()) {destination = File(p.joinAll(skinDir.uri.pathSegments.append("${nanoid(5)}.png").whereType()));}
+      while (await destination.exists()) {
+        destination = File(
+          p.joinAll(
+            skinDir.uri.pathSegments.append("${nanoid(5)}.png").whereType(),
+          ),
+        );
+      }
       await file.copy(destination.path);
     }
     setState(() {
@@ -394,7 +416,7 @@ class _ModelScreenState extends State<ModelScreen> {
   Future<void> _setSkinToCurrent() async {
     if (_skins.isEmpty) return;
     final selectedSkins = _skins.firstWhere(
-          (s) => s.selected,
+      (s) => s.selected,
       orElse: () => _skins.last,
     );
     unawaited(_updateSkin(selectedSkins.file));
@@ -408,14 +430,18 @@ class _ModelScreenState extends State<ModelScreen> {
     setState(() {});
 
     final isDefaultSkin = file.path == _defaultSkinFile.path;
-    final newTexture = isDefaultSkin ? null : await textureLoader.fromFile(file);
+    final newTexture = isDefaultSkin
+        ? null
+        : await textureLoader.fromFile(file);
     if (!isDefaultSkin && newTexture == null) {
       logger.log("Failed to load skin texture: ${file.path}");
       return;
     }
 
     if (newTexture != null) {
-      final defaultTexture = _defaultMaterialMaps.values.whereType<three.Texture>().firstOrNull;
+      final defaultTexture = _defaultMaterialMaps.values
+          .whereType<three.Texture>()
+          .firstOrNull;
       _copyTextureSettings(defaultTexture, newTexture);
       newTexture.needsUpdate = true;
     }
@@ -424,7 +450,9 @@ class _ModelScreenState extends State<ModelScreen> {
       if (object is three.Mesh) {
         final material = object.material;
         if (material != null) {
-          material.map = isDefaultSkin ? _defaultMaterialMaps[material] : newTexture;
+          material.map = isDefaultSkin
+              ? _defaultMaterialMaps[material]
+              : newTexture;
           material.map?.needsUpdate = true;
           material.needsUpdate = true;
         }
@@ -479,15 +507,18 @@ class _ModelScreenState extends State<ModelScreen> {
         .whereType<File>()
         .where(
           (element) => element.path.endsWith(".png"),
-    )
+        )
         .toList();
     files.add(_defaultSkinFile);
 
     var currentSkinName = "default";
     if (currentSkinJSONFile.existsSync()) {
       try {
-        final currentSkinData = jsonDecode(currentSkinJSONFile.readAsStringSync(),);
-        currentSkinName = (currentSkinData["currentSkin"] as String?) ?? currentSkinName;
+        final currentSkinData = jsonDecode(
+          currentSkinJSONFile.readAsStringSync(),
+        );
+        currentSkinName =
+            (currentSkinData["currentSkin"] as String?) ?? currentSkinName;
       } catch (e) {
         logger.log("Failed to read current skin: $e");
       }
@@ -523,23 +554,27 @@ class _ModelScreenState extends State<ModelScreen> {
 
   Future<ui.Image> _renderSkinThumbnail(Skin skin) async {
     const width = 256;
-    final height = cache_utils.toInt(width / (3/4), width);
+    final height = cache_utils.toInt(width / (3 / 4), width);
 
     final scene = three.Scene();
     scene.background = null;
     scene.add(three.AmbientLight(0xffffff, 3));
 
-    final camera = three.PerspectiveCamera(35, 1, 0.01, 100);
-    camera.position.setValues(0, 1, 2);
+    final camera = three.PerspectiveCamera(35, 3 / 4, 0.01, 100);
+    camera.position.setValues(0, 1, 4);
 
     final preview = character!.clone(true);
     preview.rotation.y = math.pi;
     scene.add(preview);
 
     final isDefaultSkin = skin.file.path == _defaultSkinFile.path;
-    final newTexture = isDefaultSkin ? null : await textureLoader.fromFile(skin.file);
+    final newTexture = isDefaultSkin
+        ? null
+        : await textureLoader.fromFile(skin.file);
 
-    final defaultTexture = _defaultMaterialMaps.values.whereType<three.Texture>().firstOrNull;
+    final defaultTexture = _defaultMaterialMaps.values
+        .whereType<three.Texture>()
+        .firstOrNull;
     if (newTexture != null) {
       _copyTextureSettings(defaultTexture, newTexture);
       newTexture.needsUpdate = true;
@@ -567,7 +602,14 @@ class _ModelScreenState extends State<ModelScreen> {
     threeJs.renderer!.setClearAlpha(0);
     threeJs.renderer!.clear();
     threeJs.renderer!.render(scene, camera);
-    threeJs.renderer!.readRenderTargetPixels(target, 0, 0, width, height, buffer);
+    threeJs.renderer!.readRenderTargetPixels(
+      target,
+      0,
+      0,
+      width,
+      height,
+      buffer,
+    );
 
     threeJs.renderer!.setRenderTarget(oldTarget);
     threeJs.renderer!.setClearAlpha(oldClearAlpha);
@@ -575,10 +617,20 @@ class _ModelScreenState extends State<ModelScreen> {
     target.dispose();
     newTexture?.dispose();
 
-    return _rgbaToUiImage(buffer.toDartList(), width, height);
+    return _rgbaToUiImage(
+      buffer.toDartList(),
+      width,
+      height,
+      convertLinearRgbToSrgb: true,
+    );
   }
 
-  Future<ui.Image> _rgbaToUiImage(Uint8List pixels, int width, int height) async {
+  Future<ui.Image> _rgbaToUiImage(
+    Uint8List pixels,
+    int width,
+    int height, {
+    bool convertLinearRgbToSrgb = false,
+  }) async {
     final flipped = Uint8List(pixels.length);
     final rowBytes = width * 4;
 
@@ -589,11 +641,38 @@ class _ModelScreenState extends State<ModelScreen> {
       flipped.setRange(dstOffset, dstOffset + rowBytes, pixels, srcOffset);
     }
 
+    if (convertLinearRgbToSrgb) {
+      for (var i = 0; i < flipped.length; i += 4) {
+        if (flipped[i + 3] == 0) continue;
+
+        flipped[i] = _linearRgbByteToSrgb(flipped[i]);
+        flipped[i + 1] = _linearRgbByteToSrgb(flipped[i + 1]);
+        flipped[i + 2] = _linearRgbByteToSrgb(flipped[i + 2]);
+      }
+    }
+
     final Completer<ui.Image> completer = Completer<ui.Image>();
 
-    ui.decodeImageFromPixels(flipped, width, height, ui.PixelFormat.rgba8888, (img) {completer.complete(img);},);
+    ui.decodeImageFromPixels(
+      flipped,
+      width,
+      height,
+      ui.PixelFormat.rgba8888,
+      (img) {
+        completer.complete(img);
+      },
+    );
 
     return completer.future;
+  }
+
+  int _linearRgbByteToSrgb(int value) {
+    final linear = value / 255;
+    final srgb = linear <= 0.0031308
+        ? linear * 12.92
+        : 1.055 * math.pow(linear, 1 / 2.4) - 0.055;
+
+    return (srgb * 255).round().clamp(0, 255);
   }
 }
 
