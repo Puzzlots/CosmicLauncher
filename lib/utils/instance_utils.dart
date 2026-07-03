@@ -99,7 +99,7 @@ class InstanceManager {
     unawaited(
         VersionCache.fetchVersions(
           loaderRepos: loaderRepos,
-          cacheDirPath: "${getPersistentCacheDir().path}/caches/versions",
+          cacheDirPath: p.join(getPersistentCacheDir().path, 'caches' 'versions'),
           onUpdate: (versions) {
             if (context.mounted) {
               CosmicReachLauncher.launcherHomeKey.currentState?.setState(() {
@@ -212,7 +212,7 @@ class InstanceManager {
               WidgetsBinding.instance.addPostFrameCallback((_) {
                 VersionCache.fetchVersions(
                   loaderRepos: loaderRepos,
-                  cacheDirPath: "${getPersistentCacheDir().path}/caches/versions",
+                  cacheDirPath: p.join(getPersistentCacheDir().path, 'caches' 'versions'),
                   onUpdate: (versions) {
                     if (context.mounted) {
                       setState(() {

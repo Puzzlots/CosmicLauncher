@@ -85,6 +85,18 @@ Future<bool> findAndCopyFile({
   return false;
 }
 
+extension ListExtension on List {
+  List append(dynamic value) {
+    insert(length, value);
+    return this;
+  }
+
+  List prepend(dynamic value) {
+    insert(0, value);
+    return this;
+  }
+}
+
 Future<String?> getUsername(String? apiKey) async {
   if (apiKey == null) return null;
   final response = await http.get(

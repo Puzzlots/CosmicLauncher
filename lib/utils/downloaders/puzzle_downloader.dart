@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
+import 'package:path/path.dart' as p;
 import 'package:polaris/utils/cache_utils.dart';
 import 'package:polaris/utils/download_utils.dart';
 import 'package:polaris/utils/version_cache.dart';
@@ -13,7 +14,7 @@ Future<void> downloadPuzzleVersion(
     ) async {
   coreVersion = resolveLatest('Puzzle', 'Core', coreVersion);
   cosmicVersion = resolveLatest('Puzzle', 'Cosmic', cosmicVersion);
-  final libDir = Directory("${getPersistentCacheDir().path}\\puzzle_runtime");
+  final libDir = Directory(p.join(getPersistentCacheDir().path, 'puzzle_runtime'));
   await libDir.create(recursive: true);
 
   final coreClientJar = "puzzle-loader-core-$coreVersion-client.jar";
@@ -118,7 +119,7 @@ Future<void> downloadJars(List<List<String>> files, Directory libDir) async {
   for (final pair in files) {
     final fileName = pair[0];
     final url = pair[1];
-    final file = File("${libDir.path}/$fileName");
+    final file = File(p.join(libDir.path, fileName));
     if (await file.exists()) continue;
     downloaderLogger.log("Downloading $url");
     await tryDownload(url, file);

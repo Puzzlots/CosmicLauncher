@@ -1026,7 +1026,7 @@ class LauncherHomeState extends State<LauncherHome> {
       key: _scaffoldMessengerKey,
       body: Row(
         children: [
-          // Sidebar (unchanged)
+          // Sidebar
           Container(
             width: 60,
             color: const Color(0xFF1E1E1E),
@@ -1064,11 +1064,11 @@ class LauncherHomeState extends State<LauncherHome> {
                   ),
                 ...latestThree.map(
                       (instance) => IconButton(
-                    iconSize: 28,
-                    icon: const Icon(Icons.play_arrow),
-                    tooltip: "Launch ${instance['name']}",
-                    onPressed: () => _launchInstance(instance),
-                  ),
+                        iconSize: 28,
+                        icon: const Icon(Icons.play_arrow),
+                        tooltip: "Launch ${instance['name']}",
+                        onPressed: () => _launchInstance(instance),
+                      ),
                 ),
                 if (latestThree.isNotEmpty)
                   const Padding(
@@ -1269,7 +1269,7 @@ class LauncherHomeState extends State<LauncherHome> {
                                                           crossAxisCount: 3,
                                                           mainAxisSpacing: 12,
                                                           crossAxisSpacing: 12,
-                                                          childAspectRatio: 1.4,
+                                                          childAspectRatio: 1.5,
                                                         ),
                                                         itemBuilder: (context, index) {
                                                           final instance = list[index];
@@ -1309,7 +1309,7 @@ class LauncherHomeState extends State<LauncherHome> {
                                                                 crossAxisCount: 3,
                                                                 mainAxisSpacing: 12,
                                                                 crossAxisSpacing: 12,
-                                                                childAspectRatio: 1.4,
+                                                                childAspectRatio: 1.5,
                                                               ),
                                                               itemBuilder: (context, index) {
                                                                 final instance = entry.value[index];
@@ -1336,7 +1336,7 @@ class LauncherHomeState extends State<LauncherHome> {
                                         instance: selectedInstance!,
                                         onBack: () {
                                           setState(() {
-                                            activeTab = LauncherTab.library; // switch back to library tab
+                                            activeTab = LauncherTab.library;
                                           });
                                         },
                                       );

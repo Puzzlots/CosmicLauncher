@@ -1,9 +1,10 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart';
+import 'package:path/path.dart' as p;
 import 'package:polaris/utils/cache_utils.dart';
 
 class Logger {
-  static final File _logFile = File('${getPersistentCacheDir().path}/caches/app.log');
+  static final File _logFile = File(p.join(getPersistentCacheDir().path, 'caches', 'app.log'));
 
   final String name;
 
@@ -50,7 +51,7 @@ class Logger {
   static Process? _tailProcess;
 
   static Future<void> tailLogs() async {
-    if (_tailProcess != null) return; // already running
+    if (_tailProcess != null) return;
 
     if (Platform.isWindows) {
       _tailProcess = await Process.start(

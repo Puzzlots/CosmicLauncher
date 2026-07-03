@@ -96,7 +96,7 @@ class CrmmService {
       if (type == 'mod'){
         final outputDir = Directory(p.join(file.parent.path, javaModDir));
         await outputDir.create(recursive: true);
-        unawaited(file.rename(p.join(outputDir.path, file.path.split("/").last)));
+        unawaited(file.rename(p.join(outputDir.path, file.uri.pathSegments.last)));
       } else {
         await unzipDataMod(file);
 

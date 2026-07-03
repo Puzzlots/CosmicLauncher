@@ -2,12 +2,17 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:nanoid/nanoid.dart';
+import 'package:path/path.dart' as p;
 import 'package:three_js/three_js.dart' as three;
 import 'package:three_js_advanced_loaders/three_js_advanced_loaders.dart';
 
 import '../utils/cache_utils.dart' as cache_utils;
 import '../utils/credentials.dart';
+import '../utils/general_utils.dart';
 import '../utils/logger.dart';
 
 class Skin {
@@ -33,6 +38,10 @@ class _ModelScreenState extends State<ModelScreen> {
   List<three.AnimationAction> _actions = [];
   three.AnimationAction? _currentAction;
   final textureLoader = three.TextureLoader();
+  final skinDir = Directory(p.join(cache_utils.getCosmicReachDir().path, "skins"));
+  final currentSkinJSONFile = File(p.join(cache_utils.getCosmicReachDir().path, "skins", "current.json"));
+  final Map<three.Material, three.Texture?> _defaultMaterialMaps = {};
+  three.Texture? _activeSkinTexture;
 
   late double width;
   late double height;
@@ -53,6 +62,7 @@ class _ModelScreenState extends State<ModelScreen> {
 
   @override
   void dispose() {
+    _activeSkinTexture?.dispose();
     threeJs.dispose();
     super.dispose();
   }
@@ -87,6 +97,10 @@ class _ModelScreenState extends State<ModelScreen> {
       character?.traverse((object) {
         if (object is three.Mesh) {
           object.frustumCulled = false;
+          final material = object.material;
+          if (material != null) {
+            _defaultMaterialMaps[material] = material.map;
+          }
         }
       });
 
@@ -230,20 +244,70 @@ class _ModelScreenState extends State<ModelScreen> {
           Expanded(
               flex: 3,
               child: GridView.builder(
-                itemCount: _skins.length,
+                itemCount: _skins.length + 1,
                 gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 4,
+                  crossAxisCount: 5,
                   mainAxisSpacing: 4,
                   crossAxisSpacing: 4,
-                  childAspectRatio: 1.4,
+                  childAspectRatio: 3/4,
                 ),
                 itemBuilder: (context, index) {
-                  final skin = _skins[index];
+                  if (index == 0) return _buildAddSkinCard(context);
+                  final skin = _skins[index - 1];
                   return _buildSkinCard(context, skin);
                 },
               )
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildAddSkinCard(BuildContext context) {
+    bool hovering = false;
+
+    return KeyedSubtree(
+      child: StatefulBuilder(
+        builder: (context, setHover) {
+          return MouseRegion(
+            onEnter: (_) => setHover(() => hovering = true),
+            onExit: (_) => setHover(() => hovering = false),
+            child: GestureDetector(
+              onTapDown: (details) async => await _importSkin(),
+              child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 150),
+                  decoration: BoxDecoration(
+                    color: hovering ? Theme.of(context).colorScheme.outline.withAlpha(50) : Color(0xFF1E1E1E),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                        color:  hovering ? Theme.of(context).colorScheme.outline : Theme.of(context).colorScheme.outlineVariant.withAlpha(40)
+                    ),
+                  ),
+                  padding: const EdgeInsets.all(12),
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.max,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: const [
+                      Icon(Icons.add, size: 50),
+                      SizedBox(height: 8),
+                      Text(
+                        "Add skin",
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -290,47 +354,140 @@ class _ModelScreenState extends State<ModelScreen> {
     );
   }
 
-  Future<void> _setSkinToCurrent() async {
-    Future.delayed(Duration(milliseconds: 100), () { // because why would it work if you didnt!!
-      final selectedSkins = _skins.where((s) => s.selected).toList();
-      if (selectedSkins.isNotEmpty) {
-        unawaited(_updateSkin(selectedSkins.first.file));
-      }
+  Future<void> _importSkin() async {
+    final result = await FilePicker.pickFiles(
+      dialogTitle: "Select skin file",
+      lockParentWindow: true,
+      type: FileType.custom,
+      allowedExtensions: ["png"],
+      allowMultiple: true,
+    );
+
+    if (result == null) return;
+
+    for (final path in result.paths.whereType<String>()) {
+      final file = File(path);
+      final fileName = p.basename(file.path);
+      var destination = File(p.join(skinDir.path, fileName));
+
+      while (await destination.exists()) {destination = File(p.joinAll(skinDir.uri.pathSegments.append("${nanoid(5)}.png").whereType()));}
+      await file.copy(destination.path);
+    }
+    setState(() {
+      _skins = _getAllSkins();
     });
   }
 
+  Future<void> _setSkinToCurrent() async {
+    if (_skins.isEmpty) return;
+    final selectedSkins = _skins.firstWhere(
+          (s) => s.selected,
+      orElse: () => _skins.last,
+    );
+    unawaited(_updateSkin(selectedSkins.file));
+  }
+
   Future<void> _updateSkin(File file) async {
-    final newTexture = await textureLoader.fromFile(file);
+    for (final skin in _skins) {
+      skin.selected = false;
+    }
+    _skins.firstWhere((skin) => skin.file.path == file.path).selected = true;
+    setState(() {});
+
+    final isDefaultSkin = file.path == _defaultSkinFile.path;
+    final newTexture = isDefaultSkin ? null : await textureLoader.fromFile(file);
+    if (!isDefaultSkin && newTexture == null) {
+      logger.log("Failed to load skin texture: ${file.path}");
+      return;
+    }
+
+    if (newTexture != null) {
+      final defaultTexture = _defaultMaterialMaps.values.whereType<three.Texture>().firstOrNull;
+      _copyTextureSettings(defaultTexture, newTexture);
+      newTexture.needsUpdate = true;
+    }
 
     character?.traverse((object) {
       if (object is three.Mesh) {
         final material = object.material;
         if (material != null) {
-          final oldTexture = material.map;
-          newTexture?.magFilter = oldTexture!.magFilter;
-          newTexture?.minFilter = oldTexture!.minFilter;
-          newTexture?.colorSpace = oldTexture!.colorSpace;
-          material.map = newTexture;
+          material.map = isDefaultSkin ? _defaultMaterialMaps[material] : newTexture;
+          material.map?.needsUpdate = true;
           material.needsUpdate = true;
-          oldTexture?.dispose();
-          return;
         }
       }
     });
-    newTexture?.dispose();
+
+    final previousSkinTexture = _activeSkinTexture;
+    _activeSkinTexture = newTexture;
+    if (previousSkinTexture != null && previousSkinTexture != newTexture) {
+      previousSkinTexture.dispose();
+    }
+
+    await currentSkinJSONFile.writeAsString(
+      jsonEncode({"currentSkin": file.uri.pathSegments.last}),
+    );
+  }
+
+  File get _defaultSkinFile => File(p.join(skinDir.path, "default"));
+
+  void _copyTextureSettings(three.Texture? source, three.Texture target) {
+    if (source == null) return;
+
+    target.mapping = source.mapping;
+    target.wrapS = source.wrapS;
+    target.wrapT = source.wrapT;
+    target.magFilter = source.magFilter;
+    target.minFilter = source.minFilter;
+    target.anisotropy = source.anisotropy;
+    target.format = source.format;
+    target.internalFormat = source.internalFormat;
+    target.type = source.type;
+    target.colorSpace = source.colorSpace;
+    target.generateMipmaps = source.generateMipmaps;
+    target.premultiplyAlpha = source.premultiplyAlpha;
+    target.flipY = source.flipY;
+    target.unpackAlignment = source.unpackAlignment;
+    target.offset.setFrom(source.offset);
+    target.repeat.setFrom(source.repeat);
+    target.center.setFrom(source.center);
+    target.rotation = source.rotation;
+    target.matrixAutoUpdate = source.matrixAutoUpdate;
+    target.matrix.setFrom(source.matrix);
   }
 
   List<Skin> _getAllSkins() {
-    final dir = Directory("${cache_utils.getCosmicReachDir().path}\\skins");
-    final files = dir.listSync().whereType<File>().where((element) => element.path.endsWith(".png"),).toList();
-    final currentSkinJSONFile = File("${dir.path}\\current.json");
+    if (!skinDir.existsSync()) {
+      skinDir.createSync(recursive: true);
+    }
 
-    final currentSkinData = jsonDecode(currentSkinJSONFile.readAsStringSync());
-    final currentSkinFile = File("${dir.path}\\${currentSkinData["currentSkin"]}");
+    final files = skinDir
+        .listSync()
+        .whereType<File>()
+        .where(
+          (element) => element.path.endsWith(".png"),
+    )
+        .toList();
+    files.add(_defaultSkinFile);
+
+    var currentSkinName = "default";
+    if (currentSkinJSONFile.existsSync()) {
+      try {
+        final currentSkinData = jsonDecode(currentSkinJSONFile.readAsStringSync(),);
+        currentSkinName = (currentSkinData["currentSkin"] as String?) ?? currentSkinName;
+      } catch (e) {
+        logger.log("Failed to read current skin: $e");
+      }
+    }
+    final currentSkinFile = File(p.join(skinDir.path, currentSkinName));
     List<Skin> skinList = [];
 
     for (File file in files) {
       skinList.add(Skin(file, file.path == currentSkinFile.path));
+    }
+
+    if (!skinList.any((skin) => skin.selected) && skinList.isNotEmpty) {
+      skinList.last.selected = true;
     }
 
     return skinList;

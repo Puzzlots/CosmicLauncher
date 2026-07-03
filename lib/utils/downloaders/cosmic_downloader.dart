@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:http/http.dart' as http;
+import 'package:path/path.dart' as p;
 
 import '../cache_utils.dart';
 import '../logger.dart';
@@ -13,7 +14,7 @@ Future<void> downloadCosmicReachVersion(
     ) async {
   version = resolveLatest("Vanilla", "Client", version);
   var artifact = "cosmic-reach-client-$version.jar";
-  var savePath = Directory("${getPersistentCacheDir().path}/cosmic_versions");
+  var savePath = Directory(p.join(getPersistentCacheDir().path, 'cosmic_versions'));
   await savePath.create(recursive: true);
   final url = "https://github.com/PuzzlesHQ/CRArchive/releases/download/$version/$artifact";
 
