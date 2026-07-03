@@ -33,8 +33,11 @@ class ModelScreen extends StatefulWidget {
 Logger logger = Logger.logger("ThreeJS");
 
 class _ModelScreenState extends State<ModelScreen> {
+  static final Map<String, List<ui.Image>> _skinThumbCache = {};
+
   late three.ThreeJS threeJs;
   three.Object3D? character;
+  three.Object3D? _thumbnailCharacter;
   three.AnimationMixer? _mixer;
   double _rotationY = math.pi;
   List<three.AnimationAction> _actions = [];
@@ -53,8 +56,9 @@ class _ModelScreenState extends State<ModelScreen> {
   late double height;
 
   late List<Skin> _skins;
-  final Map<String, ui.Image> _skinThumbs = {};
+  final Map<String, List<ui.Image>> _skinThumbs = _skinThumbCache;
   bool _generatingThumbs = false;
+  bool _thumbGenerationQueued = false;
 
   @override
   void initState() {
@@ -93,10 +97,13 @@ class _ModelScreenState extends State<ModelScreen> {
 
     threeJs.scene.add(three.AmbientLight(0xffffff, 3));
 
-    final loader = GLTFLoader();
-    final gltf = await loader.fromAsset('assets/models/model.glb');
+    final gltf = await GLTFLoader().fromAsset('assets/models/model.glb');
+    final thumbnailGltf = await GLTFLoader().fromAsset(
+      'assets/models/model.glb',
+    );
 
     character = gltf?.scene;
+    _thumbnailCharacter = thumbnailGltf?.scene;
 
     if (character != null) {
       threeJs.scene.add(character!);
@@ -326,6 +333,8 @@ class _ModelScreenState extends State<ModelScreen> {
   Widget _buildSkinCard(BuildContext context, Skin skin) {
     bool hovering = false;
     final preview = _skinThumbs[skin.file.path];
+    int currentImage = 0;
+    Timer? hoverTimer;
 
     return KeyedSubtree(
       child: StatefulBuilder(
@@ -337,8 +346,28 @@ class _ModelScreenState extends State<ModelScreen> {
               : SkinVisualState.idle;
 
           return MouseRegion(
-            onEnter: (_) => setHover(() => hovering = true),
-            onExit: (_) => setHover(() => hovering = false),
+            onEnter: (_) {
+              setHover(() => hovering = true);
+              if (preview == null || preview.isEmpty) return;
+              hoverTimer = Timer.periodic(
+                Duration(
+                  milliseconds: cache_utils.toInt(3600 / preview.length, 10),
+                ),
+                (_) {
+                  setHover(() {
+                    currentImage = (currentImage + 1) % preview.length;
+                  });
+                },
+              );
+            },
+            onExit: (_) {
+              hoverTimer?.cancel();
+
+              setHover(() {
+                hovering = false;
+                currentImage = 0;
+              });
+            },
             child: GestureDetector(
               onTapDown: (details) async => await _updateSkin(skin.file),
               child: AnimatedContainer(
@@ -367,12 +396,12 @@ class _ModelScreenState extends State<ModelScreen> {
                   ),
                 ),
                 padding: const EdgeInsets.all(12),
-                child: preview == null
+                child: preview == null || preview.isEmpty
                     ? const Center(
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
                     : RawImage(
-                        image: preview,
+                        image: preview[currentImage],
                         fit: BoxFit.contain,
                       ),
               ),
@@ -402,7 +431,9 @@ class _ModelScreenState extends State<ModelScreen> {
       while (await destination.exists()) {
         destination = File(
           p.joinAll(
-            skinDir.uri.pathSegments.append("${nanoid(5)}.png").whereType(),
+            List.of(
+              skinDir.uri.pathSegments,
+            ).append("${nanoid(5)}.png").whereType(),
           ),
         );
       }
@@ -411,6 +442,7 @@ class _ModelScreenState extends State<ModelScreen> {
     setState(() {
       _skins = _getAllSkins();
     });
+    unawaited(_generateSkinThumbnails());
   }
 
   Future<void> _setSkinToCurrent() async {
@@ -538,21 +570,44 @@ class _ModelScreenState extends State<ModelScreen> {
   }
 
   Future<void> _generateSkinThumbnails() async {
-    if (_generatingThumbs || character == null) return;
+    if (_thumbnailCharacter == null) {
+      _thumbGenerationQueued = true;
+      return;
+    }
+
+    if (_generatingThumbs) {
+      _thumbGenerationQueued = true;
+      return;
+    }
+
     _generatingThumbs = true;
 
-    for (final skin in _skins) {
-      final image = await _renderSkinThumbnail(skin);
-      if (!mounted) return;
+    try {
+      do {
+        _thumbGenerationQueued = false;
 
-      setState(() {
-        _skinThumbs[skin.file.path] = image;
-      });
+        final skinsToGenerate = _skins
+            .where((skin) => !_skinThumbs.containsKey(skin.file.path))
+            .toList();
+
+        for (final skin in skinsToGenerate) {
+          if (!mounted) return;
+          if (_skinThumbs.containsKey(skin.file.path)) continue;
+
+          final images = await _renderSkinThumbnail(skin);
+          _skinThumbs[skin.file.path] = images;
+
+          if (mounted) {
+            setState(() {});
+          }
+        }
+      } while (_thumbGenerationQueued && _thumbnailCharacter != null);
+    } finally {
+      _generatingThumbs = false;
     }
-    _generatingThumbs = false;
   }
 
-  Future<ui.Image> _renderSkinThumbnail(Skin skin) async {
+  Future<List<ui.Image>> _renderSkinThumbnail(Skin skin) async {
     const width = 256;
     final height = cache_utils.toInt(width / (3 / 4), width);
 
@@ -563,8 +618,10 @@ class _ModelScreenState extends State<ModelScreen> {
     final camera = three.PerspectiveCamera(35, 3 / 4, 0.01, 100);
     camera.position.setValues(0, 1, 4);
 
-    final preview = character!.clone(true);
-    preview.rotation.y = math.pi;
+    final preview = _thumbnailCharacter!.clone(true);
+    preview.traverse((object) {
+      object.frustumCulled = false;
+    });
     scene.add(preview);
 
     final isDefaultSkin = skin.file.path == _defaultSkinFile.path;
@@ -592,7 +649,6 @@ class _ModelScreenState extends State<ModelScreen> {
     });
 
     final target = three.WebGLRenderTarget(width, height);
-    final buffer = three.Uint8Array(width * height * 4);
 
     final oldTarget = threeJs.renderer!.getRenderTarget();
     final oldClearAlpha = threeJs.renderer!.getClearAlpha();
@@ -601,15 +657,26 @@ class _ModelScreenState extends State<ModelScreen> {
     threeJs.renderer!.setClearColor(three.Color.fromHex32(0x000000), 0);
     threeJs.renderer!.setClearAlpha(0);
     threeJs.renderer!.clear();
-    threeJs.renderer!.render(scene, camera);
-    threeJs.renderer!.readRenderTargetPixels(
-      target,
-      0,
-      0,
-      width,
-      height,
-      buffer,
-    );
+
+
+    final int steps = 128;
+    final List<Uint8List> rawFrames = [];
+
+    for (int i = 0; i < steps; i++) {
+      final three.Uint8Array buffer = three.Uint8Array(width * height * 4);
+      preview.rotation.y = ((i / steps) * 360 + 180.0) * (math.pi / 180.0);
+      threeJs.renderer!.clear();
+      threeJs.renderer!.render(scene, camera);
+      threeJs.renderer!.readRenderTargetPixels(
+        target,
+        0,
+        0,
+        width,
+        height,
+        buffer,
+      );
+      rawFrames.add(Uint8List.fromList(buffer.toDartList()));
+    }
 
     threeJs.renderer!.setRenderTarget(oldTarget);
     threeJs.renderer!.setClearAlpha(oldClearAlpha);
@@ -617,12 +684,14 @@ class _ModelScreenState extends State<ModelScreen> {
     target.dispose();
     newTexture?.dispose();
 
-    return _rgbaToUiImage(
-      buffer.toDartList(),
-      width,
-      height,
-      convertLinearRgbToSrgb: true,
-    );
+    final List<ui.Image> images = [];
+    for (final raw in rawFrames) {
+      images.add(
+        await _rgbaToUiImage(raw, width, height, convertLinearRgbToSrgb: true),
+      );
+    }
+
+    return images;
   }
 
   Future<ui.Image> _rgbaToUiImage(
