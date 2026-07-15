@@ -1,13 +1,43 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:window_manager/window_manager.dart';
 
 import '../../main.dart';
 
-class CustomTitleBar extends StatelessWidget {
+class CustomTitleBar extends StatefulWidget {
   final String version;
   final ValueNotifier<int> runningInstances;
 
   const CustomTitleBar(this.version, this.runningInstances, {super.key});
+
+  @override
+  State<CustomTitleBar> createState() => _CustomTitleBarState();
+}
+
+class _CustomTitleBarState extends State<CustomTitleBar> {
+  bool showUpdateIcon = false;
+
+  @override
+  void initState() {
+    super.initState();
+    checkIfOnLatestVersion();
+  }
+
+  Future<void> checkIfOnLatestVersion() async {
+    final url = 'https://api.github.com/repos/Puzzlots/CosmicLauncher/releases/latest';
+    final response = await http.get(Uri.parse(url));
+    if (response.statusCode == 200) {
+      var release = jsonDecode(response.body) as Map<String, dynamic>;
+      logger.log(release["tag_name"].toString());
+      setState(() {
+        showUpdateIcon = !release["tag_name"].toString().contains(widget.version);
+      });
+    } else {
+      logger.log("Failed to fetch Versions");
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -32,23 +62,24 @@ class CustomTitleBar extends StatelessWidget {
                           child: Row(
                               children:[
                                 Text(
-                                  'Version $version',
+                                  'Version ${widget.version}',
                                   style: TextStyle(fontSize: 15, fontWeight: FontWeight.normal, color: Colors.grey),
                                 ),
-                                // TODO: make this function
-                                // SizedBox(width: 5),
-                                // Tooltip(
-                                //     message: "A new version is available",
-                                //     child: Icon(
-                                //       Icons.download_sharp,
-                                //       color: Theme.of(context).colorScheme.primary,
-                                //     )
-                                // )
+                                if (showUpdateIcon) ...[
+                                  const SizedBox(width: 5),
+                                  Tooltip(
+                                    message: "A new version is available",
+                                    child: Icon(
+                                      Icons.download_sharp,
+                                      color: Theme.of(context).colorScheme.primary,
+                                    ),
+                                  ),
+                                ],
                               ]
                           ),
                         ),
                         ValueListenableBuilder<int>(
-                          valueListenable: runningInstances,
+                          valueListenable: widget.runningInstances,
                           builder: (context, value, child) {
                             return Row(
                               children: [
@@ -75,28 +106,28 @@ class CustomTitleBar extends StatelessWidget {
                 ),
               ),
               Container(
-                color: const Color(0xFF1E1E1E),
-                child: Row(children: [
-                  _WindowButton(
-                    icon: Icons.remove,
-                    onPressed: () => windowManager.minimize(),
-                  ),
-                  _WindowButton(
-                    icon: Icons.crop_square,
-                    onPressed: () async {
-                      if (await windowManager.isMaximized()) {
-                        await windowManager.unmaximize();
-                      } else {
-                        await windowManager.maximize();
-                      }
-                    },
-                  ),
-                  _WindowButton(
-                    icon: Icons.close,
-                    hoverColor: Colors.red,
-                    onPressed: () => windowManager.close(),
-                  ),
-                ],)
+                  color: const Color(0xFF1E1E1E),
+                  child: Row(children: [
+                    _WindowButton(
+                      icon: Icons.remove,
+                      onPressed: () => windowManager.minimize(),
+                    ),
+                    _WindowButton(
+                      icon: Icons.crop_square,
+                      onPressed: () async {
+                        if (await windowManager.isMaximized()) {
+                          await windowManager.unmaximize();
+                        } else {
+                          await windowManager.maximize();
+                        }
+                      },
+                    ),
+                    _WindowButton(
+                      icon: Icons.close,
+                      hoverColor: Colors.red,
+                      onPressed: () => windowManager.close(),
+                    ),
+                  ],)
               )
 
             ],

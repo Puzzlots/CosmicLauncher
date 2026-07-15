@@ -611,27 +611,32 @@ class LauncherHomeState extends State<LauncherHome> {
                           fontWeight: FontWeight.bold,
                         ),
                       ),
-                      Row(
-                        children: [
-                          Text(
-                            "${instance['loader']} | ${instance['version']}",
-                            style: const TextStyle(
-                              fontSize: 13,
-                              color: Colors.white60,
+                      Expanded(
+                        flex: 0,
+                        child:
+                        Row(
+                          children: [
+                            Text(
+                              "${instance['loader']} | ${instance['version']}",
+                              style: const TextStyle(
+                                fontSize: 13,
+                                color: Colors.white60,
+                              ),
                             ),
-                          ),
-                          const Spacer(),
-                          Text(
-                            instance['playtime'] == null
-                                ? ''
-                                : "Played for ${getPlaytimeString(instance)}",
-                            style: const TextStyle(
-                              fontSize: 13,
-                              color: Colors.grey,
+                            const Spacer(),
+                            Text(
+                              instance['playtime'] == null
+                                  ? ''
+                                  : "Played for ${getPlaytimeString(instance)}",
+                              style: const TextStyle(
+                                fontSize: 13,
+                                color: Colors.grey,
+                              ),
                             ),
-                          ),
-                        ],
-                      ),
+                          ],
+                        ),
+                      )
+
                     ],
                   ),
                 ),
@@ -744,6 +749,7 @@ class LauncherHomeState extends State<LauncherHome> {
             onPressed: () {
               setState(() {
                 instances.remove(instance);
+                // ignore: invalid_annotation_target
                 @override
                 // ignore: unused_element
                 void initState() {
@@ -1086,7 +1092,7 @@ class LauncherHomeState extends State<LauncherHome> {
                       ? Theme.of(context).colorScheme.primary
                       : Colors.white,
                   tooltip: "Skins",
-                  onPressed: () => setState(() => activeTab = LauncherTab.skins),//TODO do skins tab (WIP)
+                  onPressed: () => setState(() => activeTab = LauncherTab.skins),
                 ),
 
                 //Quick launch buttons
