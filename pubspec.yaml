@@ -1,7 +1,7 @@
 name: polaris
 description: An Interstellar Cosmic Launcher.
 publish_to: 'none'
-version: 0.6.2+0
+version: 0.7.0+0
 
 environment:
   sdk: ^3.10.1
@@ -16,12 +16,8 @@ dependencies:
   flutter_layout_grid: ^2.0.8
   flutter_riverpod: ^3.3.2
   math_expressions: ^3.1.0
-  window_size: 
-    git:
-      url: https://github.com/google/flutter-desktop-embedding.git
-      path: plugins/window_size
   dropdown_search: ^7.0.0
-  uuid: ^4.5.3
+  uuid: ^4.6.0
   http: ^1.6.0
   path: ^1.9.1
   nanoid: ^1.0.0
@@ -34,6 +30,7 @@ dependencies:
   three_js: 0.2.4
   three_js_advanced_loaders: 0.2.4
   url_launcher: ^6.3.2
+  window_manager: ^0.4.3
 
 dev_dependencies:
   analysis_defaults:

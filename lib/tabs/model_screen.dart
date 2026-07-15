@@ -608,90 +608,96 @@ class _ModelScreenState extends State<ModelScreen> {
   }
 
   Future<List<ui.Image>> _renderSkinThumbnail(Skin skin) async {
-    const width = 256;
-    final height = cache_utils.toInt(width / (3 / 4), width);
+    try {
+      const width = 230;
+      final height = cache_utils.toInt(width / (3 / 4), width);
 
-    final scene = three.Scene();
-    scene.background = null;
-    scene.add(three.AmbientLight(0xffffff, 3));
+      final scene = three.Scene();
+      scene.background = null;
+      scene.add(three.AmbientLight(0xffffff, 3));
 
-    final camera = three.PerspectiveCamera(35, 3 / 4, 0.01, 100);
-    camera.position.setValues(0, 1, 4);
+      final camera = three.PerspectiveCamera(35, 3 / 4, 0.01, 100);
+      camera.position.setValues(0, 1, 4);
 
-    final preview = _thumbnailCharacter!.clone(true);
-    preview.traverse((object) {
-      object.frustumCulled = false;
-    });
-    scene.add(preview);
+      final preview = _thumbnailCharacter!.clone(true);
+      preview.traverse((object) {
+        object.frustumCulled = false;
+      });
+      scene.add(preview);
 
-    final isDefaultSkin = skin.file.path == _defaultSkinFile.path;
-    final newTexture = isDefaultSkin
-        ? null
-        : await textureLoader.fromFile(skin.file);
+      final isDefaultSkin = skin.file.path == _defaultSkinFile.path;
+      final newTexture = isDefaultSkin
+          ? null
+          : await textureLoader.fromFile(skin.file);
 
-    final defaultTexture = _defaultMaterialMaps.values
-        .whereType<three.Texture>()
-        .firstOrNull;
-    if (newTexture != null) {
-      _copyTextureSettings(defaultTexture, newTexture);
-      newTexture.needsUpdate = true;
-    }
-
-    preview.traverse((object) {
-      if (object is three.Mesh) {
-        final material = object.material;
-        if (material != null) {
-          material.map = isDefaultSkin ? defaultTexture : newTexture;
-          material.map?.needsUpdate = true;
-          material.needsUpdate = true;
-        }
+      final defaultTexture = _defaultMaterialMaps.values
+          .whereType<three.Texture>()
+          .firstOrNull;
+      if (newTexture != null) {
+        _copyTextureSettings(defaultTexture, newTexture);
+        newTexture.needsUpdate = true;
       }
-    });
 
-    final target = three.WebGLRenderTarget(width, height);
+      preview.traverse((object) {
+        if (object is three.Mesh) {
+          final material = object.material;
+          if (material != null) {
+            material.map = isDefaultSkin ? defaultTexture : newTexture;
+            material.map?.needsUpdate = true;
+            material.needsUpdate = true;
+          }
+        }
+      });
 
-    final oldTarget = threeJs.renderer!.getRenderTarget();
-    final oldClearAlpha = threeJs.renderer!.getClearAlpha();
+      final target = three.WebGLRenderTarget(width, height);
 
-    threeJs.renderer!.setRenderTarget(target);
-    threeJs.renderer!.setClearColor(three.Color.fromHex32(0x000000), 0);
-    threeJs.renderer!.setClearAlpha(0);
-    threeJs.renderer!.clear();
+      final oldTarget = threeJs.renderer!.getRenderTarget();
+      final oldClearAlpha = threeJs.renderer!.getClearAlpha();
 
-
-    final int steps = 128;
-    final List<Uint8List> rawFrames = [];
-
-    for (int i = 0; i < steps; i++) {
-      final three.Uint8Array buffer = three.Uint8Array(width * height * 4);
-      preview.rotation.y = ((i / steps) * 360 + 180.0) * (math.pi / 180.0);
+      threeJs.renderer!.setRenderTarget(target);
+      threeJs.renderer!.setClearColor(three.Color.fromHex32(0x000000), 0);
+      threeJs.renderer!.setClearAlpha(0);
       threeJs.renderer!.clear();
-      threeJs.renderer!.render(scene, camera);
-      threeJs.renderer!.readRenderTargetPixels(
-        target,
-        0,
-        0,
-        width,
-        height,
-        buffer,
-      );
-      rawFrames.add(Uint8List.fromList(buffer.toDartList()));
+
+
+      final int steps = 20;
+      final List<Uint8List> rawFrames = [];
+
+      for (int i = 0; i < steps; i++) {
+        final three.Uint8Array buffer = three.Uint8Array(width * height * 4);
+        preview.rotation.y = ((i / steps) * 360 + 180.0) * (math.pi / 180.0);
+        threeJs.renderer!.clear();
+        threeJs.renderer!.render(scene, camera);
+        threeJs.renderer!.readRenderTargetPixels(
+          target,
+          0,
+          0,
+          width,
+          height,
+          buffer,
+        );
+        rawFrames.add(Uint8List.fromList(buffer.toDartList()));
+      }
+
+      threeJs.renderer!.setRenderTarget(oldTarget);
+      threeJs.renderer!.setClearAlpha(oldClearAlpha);
+
+      target.dispose();
+      newTexture?.dispose();
+
+      final List<ui.Image> images = [];
+      for (final raw in rawFrames) {
+        images.add(
+          await _rgbaToUiImage(
+              raw, width, height, convertLinearRgbToSrgb: true),
+        );
+      }
+
+      return images;
+    } catch (e) {
+      logger.log(e.toString());
+      return [];
     }
-
-    threeJs.renderer!.setRenderTarget(oldTarget);
-    threeJs.renderer!.setClearAlpha(oldClearAlpha);
-
-    target.dispose();
-    newTexture?.dispose();
-
-    final List<ui.Image> images = [];
-    for (final raw in rawFrames) {
-      images.add(
-        await _rgbaToUiImage(raw, width, height, convertLinearRgbToSrgb: true),
-      );
-    }
-
-    return images;
   }
 
   Future<ui.Image> _rgbaToUiImage(

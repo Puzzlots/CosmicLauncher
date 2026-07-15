@@ -20,6 +20,8 @@ import 'package:polaris/utils/general_utils.dart';
 import 'package:polaris/utils/instance_utils.dart';
 import 'package:polaris/utils/logger.dart';
 import 'package:polaris/utils/persistent_widgets.dart';
+import 'package:polaris/utils/widgets/custom_title_bar.dart';
+import 'package:window_manager/window_manager.dart';
 
 import 'utils/version_cache.dart';
 
@@ -34,6 +36,23 @@ late final bool verbose;
 late Logger logger;
 
 void main(List<String> arguments) async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await windowManager.ensureInitialized();
+
+  WindowOptions windowOptions = const WindowOptions(
+    center: true,
+    backgroundColor: Colors.transparent,
+    skipTaskbar: false,
+    titleBarStyle: TitleBarStyle.hidden,
+    size: Size(1000, 600),
+    minimumSize: Size(1000, 500)
+  );
+
+  await windowManager.waitUntilReadyToShow(windowOptions, () async {
+    await windowManager.show();
+    await windowManager.focus();
+  });
+
   final parser = ArgParser()
     ..addFlag(
       'verbose',
@@ -110,8 +129,6 @@ class LauncherHomeState extends State<LauncherHome> {
   Map<String, dynamic>? selectedInstance;
 
   LauncherTab activeTab = LauncherTab.library; // track which tab is active
-
-
 
   @override
   void initState() {
@@ -1048,7 +1065,7 @@ class LauncherHomeState extends State<LauncherHome> {
             color: const Color(0xFF1E1E1E),
             child: Column(
               children: [
-                const SizedBox(height: 16),
+                const SizedBox(height: 2),
 
                 //Library tab
                 IconButton(
@@ -1139,60 +1156,7 @@ class LauncherHomeState extends State<LauncherHome> {
             child: Column(
               children: [
                 // Top bar
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  color: const Color(0xFF1E1E1E),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        title,
-                        style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                      ),
-                      Center(
-                        child: Row(
-                            children:[
-                              Text(
-                                'Version $version',
-                                style: TextStyle(fontSize: 15, fontWeight: FontWeight.normal, color: Colors.grey),
-                              ),
-                              // TODO: make this function
-                              // SizedBox(width: 5),
-                              // Tooltip(
-                              //     message: "A new version is available",
-                              //     child: Icon(
-                              //       Icons.download_sharp,
-                              //       color: Theme.of(context).colorScheme.primary,
-                              //     )
-                              // )
-                            ]
-                        ),
-                      ),
-                      ValueListenableBuilder<int>(
-                        valueListenable: runningInstances,
-                        builder: (context, value, child) {
-                          return Row(
-                            children: [
-                              Container(
-                                width: 12,
-                                height: 12,
-                                decoration: BoxDecoration(
-                                  color: value == 0 ? Colors.red : Colors.green,
-                                  shape: BoxShape.circle,
-                                ),
-                              ),
-                              const SizedBox(width: 6),
-                              Text(
-                                value == 0 ? "No instances running" : "$value instance${value == 1 ? '' : 's'} running",
-                                style: const TextStyle(fontSize: 14),
-                              ),
-                            ],
-                          );
-                        },
-                      )
-                    ],
-                  ),
-                ),
+                CustomTitleBar(version ?? '', runningInstances),
                 const Divider(color: Colors.white24, height: 1, thickness: 1),
 
                 Expanded(
