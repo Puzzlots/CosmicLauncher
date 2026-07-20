@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
+import 'package:path/path.dart' as p;
 
 import 'instance_utils.dart';
 import 'logger.dart';
@@ -22,7 +23,7 @@ class VersionCache {
 
       for (final modTypeEntry in loaderEntry.value.entries) {
         final modType = modTypeEntry.key;
-        final cacheFile = File('$cacheDirPath/$loader-$modType.json');
+        final cacheFile = File(p.join(cacheDirPath,"$loader-$modType.json"));
 
         Map<String, dynamic>? localData;
         if (cacheFile.existsSync()) {
@@ -50,7 +51,7 @@ class VersionCache {
         for (final modTypeEntry in loaderEntry.value.entries) {
           final modType = modTypeEntry.key;
           final repo = modTypeEntry.value;
-          final cacheFile = File('$cacheDirPath/$loader-$modType.json');
+          final cacheFile = File(p.join(cacheDirPath,"$loader-$modType.json"));
 
           Map<String, dynamic>? localData;
           if (cacheFile.existsSync()) {

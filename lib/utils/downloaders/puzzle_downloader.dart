@@ -49,7 +49,7 @@ Future<void> downloadPuzzleVersion(
     ...(cosmicDepsData['client'] as List),
   ].where((e) => e['type'] == 'implementation').toList();
 
-  final libFile = File("${libDir.path}\\$coreVersion-$cosmicVersion.txt");
+  final libFile = File(p.join(libDir.path, "$coreVersion-$cosmicVersion.txt"));
   await libFile.parent.create(recursive: true);
   if (!await libFile.exists()) {
     await libFile.create();
@@ -57,7 +57,7 @@ Future<void> downloadPuzzleVersion(
 
   for (List<String> dep in urls) {
     downloadLogger.log("Checking if ${dep[0]} is in library list");
-    String filePath = "${libDir.path}\\${dep[0]}" ;
+    String filePath = p.join(libDir.path, dep[0]) ;
     if (!libFile.readAsLinesSync().contains(filePath)) await libFile.writeAsString("$filePath\n", mode: FileMode.append);
   }
 
@@ -66,7 +66,7 @@ Future<void> downloadPuzzleVersion(
     final artifact = dep['artifactId'] as String;
     final version = dep['version'] as String;
     final fileName = "$artifact-$version.jar";
-    final dir = "${libDir.path}\\$fileName";
+    final dir = p.join(libDir.path, fileName);
 
     bool downloaded = false;
     final file = File(dir);

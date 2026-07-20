@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:path/path.dart' as p;
 
 import 'cache_utils.dart';
 
@@ -70,7 +71,7 @@ Future<List<Map<String, String>>> detectJavaInstallations() async {
     standardDirs.add('/Library/Java/JavaVirtualMachines');
   }
 
-  standardDirs.add("${getPersistentCacheDir().path}/java");
+  standardDirs.add(p.join(getPersistentCacheDir().path, "java"));
 
   for (final path in standardDirs) {
     final dir = Directory(path);
@@ -181,8 +182,8 @@ class _JavaTesterButtonState extends State<JavaTesterButton> {
 
     // Typical Java structures
     final candidates = [
-      File('${dir.path}/bin/$execName'),
-      File('${dir.path}/$execName'),
+      File(p.join(dir.path, "bin", execName)),
+      File(p.join(dir.path, execName)),
     ];
 
     for (final f in candidates) {

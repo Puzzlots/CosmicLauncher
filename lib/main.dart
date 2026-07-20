@@ -319,7 +319,7 @@ class LauncherHomeState extends State<LauncherHome> {
 
     switch (loader) {
       case 'Puzzle': {
-        final libFile = File("${getPersistentCacheDir().path}/puzzle_runtime/${resolveLatest('Puzzle', 'Core', (instance['Core'] as String?) ?? 'latest')}-${resolveLatest('Puzzle', 'Cosmic', (instance['Cosmic'] as String?) ?? 'latest')}.txt");
+        final libFile = File(p.join(getPersistentCacheDir().path, "puzzle_runtime", "${resolveLatest('Puzzle', 'Core', (instance['Core'] as String?) ?? 'latest')}-${resolveLatest('Puzzle', 'Cosmic', (instance['Cosmic'] as String?) ?? 'latest')}.txt"));
         if (!libFile.existsSync()) {
           logger.log("Library file does not exist");
           unawaited(instanceManager.refreshInstance(context, instance));
@@ -334,7 +334,7 @@ class LauncherHomeState extends State<LauncherHome> {
 
         jars += "$sep${getPersistentCacheDir().path}/cosmic_versions/cosmic-reach-client-${resolveLatest('Vanilla','Client', instance['version'] as String)}.jar";
 
-        final modFolderDir = Directory("${getPersistentCacheDir().path}/instances/${instance['uuid']}/${CrmmService.javaModDir}");
+        final modFolderDir = Directory(p.join(getPersistentCacheDir().path, "instances", instance['uuid'] as String, CrmmService.javaModDir));
         await modFolderDir.create(recursive: true);
 
         args = [
@@ -715,12 +715,12 @@ class LauncherHomeState extends State<LauncherHome> {
 
 
   bool _checkVersionDownloaded(Map<String, dynamic> instance) {
-    if (!File("${getPersistentCacheDir().path}/cosmic_versions/cosmic-reach-client-${resolveLatest("Vanilla","Client", instance['version'] as String)}.jar").existsSync()) {
+    if (!File(p.join(getPersistentCacheDir().path, "cosmic_versions", "cosmic-reach-client-${resolveLatest("Vanilla","Client", instance['version'] as String)}.jar")).existsSync()) {
       unawaited(instanceManager.refreshInstance(context, instance));
       return false;
     }
     if (instance['loader'] == 'Puzzle') {
-      if (!File("${getPersistentCacheDir().path}/puzzle_runtime/${resolveLatest("Puzzle", "Core",instance['Core'] as String? ?? 'latest')}-${resolveLatest("Puzzle", "Cosmic", instance['Cosmic'] as String? ?? 'latest')}.txt").existsSync()) {
+      if (!File(p.join(getPersistentCacheDir().path, "puzzle_runtime", "${resolveLatest("Puzzle", "Core",instance['Core'] as String? ?? 'latest')}-${resolveLatest("Puzzle", "Cosmic", instance['Cosmic'] as String? ?? 'latest')}.txt")).existsSync()) {
         logger.log("Library does not exist");
         unawaited(instanceManager.refreshInstance(context, instance));
         return false;

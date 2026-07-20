@@ -18,13 +18,13 @@ Future<void> downloadCosmicReachVersion(
   await savePath.create(recursive: true);
   final url = "https://github.com/PuzzlesHQ/CRArchive/releases/download/$version/$artifact";
 
-  if (File("${savePath.path}/$artifact").existsSync()) return;
+  if (File(p.join(savePath.path, artifact)).existsSync()) return;
   try {
     final resp = await http.get(Uri.parse(url));
 
     if (resp.statusCode != 200) throw Exception("HTTP ${resp.statusCode}");
 
-    final file = File("${savePath.path}/$artifact");
+    final file = File(p.join(savePath.path, artifact));
     await file.writeAsBytes(resp.bodyBytes);
   } catch (e) {
       downloaderLogger.log("Failed to download cosmic reach jar: $e");

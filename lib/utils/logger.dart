@@ -16,7 +16,7 @@ class Logger {
 
   static Future<void> init() async {
     if (!await _logFile.exists()) {
-      await _logFile.create();
+      await _logFile.create(recursive: true);
     }
     await _logFile.writeAsString('');
   }
