@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:path/path.dart' as p;
 import 'package:polaris/utils/general_utils.dart';
 import 'package:polaris/utils/version_cache.dart';
 
@@ -8,6 +10,7 @@ import '../main.dart';
 import '../utils/cache_utils.dart';
 import '../utils/crmm/crmm_project.dart';
 import '../utils/crmm/crmm_service.dart';
+import '../utils/instance_utils.dart';
 import '../utils/widgets/stateless_widgets.dart';
 
 class AddContentTab extends StatefulWidget {
@@ -273,9 +276,14 @@ class _CrmmSearchResultsState extends State<_CrmmSearchResults> {
       return const Center(child: CircularProgressIndicator());
     }
 
+    var quotes =
+    ["Nothing but dust...", "Well this is awkward...", "Nothing here captain...", "Keep searching...", "We searched far and wide...", "You did want to find projects right?", "Uhh, try again...",
+      "**whistling**", "What were you even trying to find...", "Hello there fellow searcher", "It's just an empty void...", "Next time try searching for something that actually exists...", "No luck here...",
+      "Maybe in the back aisle?", "You're going to need a wizard to find that...", "**sighs** nope...", "Not on CRMM today...", "Try again tomorrow...", "**crickets**", "Is that a tumbleweed?"];
+
     if (results.isEmpty) {
-      return const Center(
-        child: Text("Search for mods to install"),
+      return Center(
+        child: Text(quotes[Random().nextInt(quotes.length)]),
       );
     }
 
@@ -298,10 +306,20 @@ class _CrmmSearchResultsState extends State<_CrmmSearchResults> {
               overflow: TextOverflow.ellipsis,
             ),
             trailing: IconButton(
-              icon: Icon(Icons.download),
+              icon: widget.instance["mods"]?[project.slug] != null ? (widget.instance["mods"]?[project.slug]["version"] == project.latestVersionSlug) ? Icon(Icons.check_circle, color: Colors.green) : Icon(Icons.update): Icon(Icons.download),
               onPressed: () {
-                CrmmService.downloadLatestProject(project.slug, widget.selectedProjectType, widget.versionLocked, "${getPersistentCacheDir().path}/instances/${widget.instance['uuid'] as String}", (resolveLatest("Vanilla", "Client", widget.instance['version'] as String).split('-').first));
-              },
+                CrmmService.downloadLatestProject(project.slug, widget.selectedProjectType, widget.versionLocked, p.join(getPersistentCacheDir().path, "instances", widget.instance['uuid'] as String), (resolveLatest("Vanilla", "Client", widget.instance['version'] as String).split('-').first));
+                final Map<String, dynamic> mods = (widget.instance["mods"] ??= <String, dynamic>{} ) as Map<String,dynamic>;
+                mods[project.slug] = {
+                  "version": project.latestVersionSlug,
+                  "enabled": true,
+                  "type": project.projectType,
+                  "path": project.latestVersionPrimaryFileName,
+                  "sha512": project.latestVersionPrimaryFileHash
+                };
+                setState(() {});
+                InstanceManager().saveInstance(widget.instance['uuid'] as String, widget.instance);
+                },
             ),
           ),
         );

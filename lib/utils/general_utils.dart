@@ -122,3 +122,13 @@ Future<String?> getUsername(String? apiKey) async {
   final json = jsonDecode(response.body);
   return json['user']['username'] as String;
 }
+
+Future<void> createSymlink(String target, String linkPath) async {
+  final link = Link(linkPath);
+
+  if (await link.exists()) {
+    await link.delete();
+  }
+
+  await link.create(target);
+}

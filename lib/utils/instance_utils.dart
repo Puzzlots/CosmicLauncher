@@ -186,7 +186,7 @@ class InstanceManager {
               .toList();
         },
         selectedItem: selected,
-        onSaved: (v) {
+        onSelected: (v) {
           if (v != null) onChanged(v);
         },
         popupProps: const PopupProps.menu(showSearchBox: true),

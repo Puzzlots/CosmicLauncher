@@ -18,7 +18,7 @@ class CrmmService {
 
   static Future<List<CrmmProject>> searchProjects(String query, String type, String gameVersion, String sortBy, bool versionLocked) async {
 
-      crmmLogger.log("Searching for $query as $type ${versionLocked ? "on Cosmic Reach version $gameVersion" : ''}");
+    crmmLogger.log("Searching for '$query' as $type ${versionLocked ? "on Cosmic Reach version $gameVersion" : ''}");
 
     final url = Uri.https('api.crmods.org', '/api/search',
         {
@@ -26,36 +26,54 @@ class CrmmService {
           'type': type,
           if (type == 'mod') 'l': 'puzzle_loader',
           'sortby': sortBy,
+          if (type == 'mod') 'e': 'client', // must support client
           if (versionLocked) 'v': gameVersion
         }
     );
-      crmmLogger.log(url.toString());
-
 
     try {
       final response = await http.get(url);
 
-      if (response.statusCode == 200) {
-        final Map<String, dynamic> data = json.decode(response.body) as Map<String, dynamic>;
+      if (response.statusCode != 200) crmmLogger.log("Error fetching CRMM projects ${response.statusCode}");
+      final Map<String, dynamic> data = json.decode(response.body) as Map<String, dynamic>;
 
-        final List<dynamic> hits = data['hits'] as List<dynamic>;
+      final List<dynamic> hits = data['hits'] as List<dynamic>;
 
-        // Convert each hit to CrmmProject
-        final projects = hits.map<CrmmProject>((hit) {
-          return CrmmProject.fromJson(hit as Map<String, dynamic>);
-        }).toList();
+      // Get latest project version info
+      if (hits.isEmpty) return [];
+      final versionsUrl = Uri.https('api.crmods.org', '/api/projects',
+          {
+            'ids': hits.map((hit) => hit["id"]).join(','),
+            'include': 'version-info',
+            'version-info-limit': '1'
+          }
+      );
+      final versionsResponse = await http.get(versionsUrl);
 
-        return projects;
-      } else {
-          crmmLogger.log("Error fetching CRMM projects ${response.statusCode}");
+      if (versionsResponse.statusCode != 200) crmmLogger.log("Error fetching version info ${versionsResponse.statusCode}");
+      var versionData = {
+        for (final item in (json.decode(versionsResponse.body) as List<dynamic>).map((e) => e))
+          item['id']: item..remove('id')
+      };
 
+      for (var hit in hits) {
+        hit["latestVersionSlug"] = (versionData[hit["id"]]?["versions"][0]?["slug"] as String? ?? '');
+        hit["latestVersionPrimaryFileName"] = (versionData[hit["id"]]?["versions"][0]?["primaryFile"]["name"] as String? ?? '');
+        hit["latestVersionPrimaryFileHash"] = (versionData[hit["id"]]?["versions"][0]?["primaryFile"]["sha512_hash"] as String? ?? '');
       }
+
+      // Convert each hit to CrmmProject
+      final projects = hits.map<CrmmProject>((hit) {
+        return CrmmProject.fromJson(hit as Map<String, dynamic>);
+      }).toList();
+
+      return projects;
+
     } catch (e) {
       crmmLogger.log(e.toString());
     }
 
     return [];
-
   }
 
   static Future<void> downloadLatestProject(String slug, String type, bool versionLocked, String path, String gameVersion) async {
@@ -68,7 +86,6 @@ class CrmmService {
 
     crmmLogger.log(url.toString());
     crmmLogger.log('Downloading from: $url');
-
 
     try {
       final response = await http.get(url);

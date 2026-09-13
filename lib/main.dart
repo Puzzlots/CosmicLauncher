@@ -145,7 +145,7 @@ class LauncherHomeState extends State<LauncherHome> {
     do {
       final short = nanoid(5);
       id = '${details['name']}-$short';
-    } while (await instanceManager.loadInstance(id) != null); //oh its this
+    } while (await instanceManager.loadInstance(id) != null);
 
     details['uuid'] = id;
     await instanceManager.saveInstance(id, details);
@@ -326,13 +326,22 @@ class LauncherHomeState extends State<LauncherHome> {
           return;
         }
         final sep = Platform.isWindows ? ';' : ':';
+
+        var mods = (instance["mods"] as Map<String, dynamic>)
+            .values
+            .where((e) => e["type"] == "mod" && e["enabled"] as bool)
+            .map((f) => p.join(getPersistentCacheDir().path, "instances", instance["uuid"] as String, "jmods", f["path"] as String))
+            .join(sep);
+
+        logger.log("Json Mods: $mods");
+
         var jars = libFile
             .readAsLinesSync()
             .where((f) => f.toString().endsWith('.jar'))
             .map((f) => f.toString())
             .join(sep);
 
-        jars += "$sep${getPersistentCacheDir().path}/cosmic_versions/cosmic-reach-client-${resolveLatest('Vanilla','Client', instance['version'] as String)}.jar";
+        jars += "$sep${p.join(getPersistentCacheDir().path, "cosmic_versions", "cosmic-reach-client-${resolveLatest('Vanilla','Client', instance['version'] as String)}.jar")}";
 
         final modFolderDir = Directory(p.join(getPersistentCacheDir().path, "instances", instance['uuid'] as String, CrmmService.javaModDir));
         await modFolderDir.create(recursive: true);
@@ -342,16 +351,16 @@ class LauncherHomeState extends State<LauncherHome> {
           '-Xmx${maxMem}m',
           '-cp', jars,
           'dev.puzzleshq.puzzleloader.loader.launch.pieces.ClientPiece',
-          '--mod-folder=${modFolderDir.path}',
+          '--mod-paths=$mods',
+          '-s', (p.join(getPersistentCacheDir().path, "instances", instance['uuid'] as String))
         ];
       }
       case 'Vanilla': {
         args = [
           '-Xms${minMem}m',
           '-Xmx${maxMem}m',
-          '-jar',
-          "${getPersistentCacheDir().path}/cosmic_versions/cosmic-reach-client-${resolveLatest('Vanilla','Client', instance['version'] as String)}.jar",
-          '-s "${getPersistentCacheDir().path}/instances/${instance['uuid'] as String}/"'
+          '-jar', p.join(getPersistentCacheDir().path, "cosmic_versions", "cosmic-reach-client-${resolveLatest('Vanilla','Client', instance['version'] as String)}.jar"),
+          '-s', (p.join(getPersistentCacheDir().path, "instances", instance['uuid'] as String))
         ];
       }
       default: return;
@@ -376,6 +385,8 @@ class LauncherHomeState extends State<LauncherHome> {
       ,));
 
     args.addAll(prefs.getValue<dynamic>('defaults_instance_args').toString().split(','));
+
+    await createSymlink(p.join(getCosmicReachDir().path, "skins"), p.join(getPersistentCacheDir().path, "instances", instance['uuid'] as String, "skins"));
 
     try {
       final startTime = DateTime.now().toUtc();

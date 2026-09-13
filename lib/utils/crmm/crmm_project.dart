@@ -1,10 +1,11 @@
-import 'crmm_service.dart';
-
 class CrmmProject {
   final String id;
   final String slug;
   final String name;
   final String summary;
+  final String latestVersionSlug;
+  final String latestVersionPrimaryFileName;
+  final String latestVersionPrimaryFileHash;
 
   /// mod / shader / resourcepack / datapack
   final String projectType;
@@ -42,6 +43,9 @@ class CrmmProject {
     required this.gameVersions,
     required this.loaders,
     required this.author,
+    required this.latestVersionSlug,
+    required this.latestVersionPrimaryFileName,
+    required this.latestVersionPrimaryFileHash,
   });
 
   factory CrmmProject.fromJson(Map<String, dynamic> json) {
@@ -81,8 +85,10 @@ class CrmmProject {
       loaders: (json['loaders'] as List<dynamic>? ?? [])
           .map<Loader>((e) => _loaderFromString(e as String))
           .toList(),
+      latestVersionSlug: json["latestVersionSlug"] as String? ?? '',
+      latestVersionPrimaryFileName: json["latestVersionPrimaryFileName"] as String? ?? '',
+      latestVersionPrimaryFileHash: json["latestVersionPrimaryFileHash"] as String? ?? '',
     );
-    CrmmService.crmmLogger.log("Found ${project.name} by ${project.author}");
 
     return project;
   }
@@ -92,6 +98,7 @@ enum Loader {
   fabric,
   quilt,
   puzzle,
+  simplyShaders
 }
 
 Loader _loaderFromString(String value) {
@@ -102,6 +109,8 @@ Loader _loaderFromString(String value) {
       return Loader.quilt;
     case 'puzzle_loader':
       return Loader.puzzle;
+    case 'simply_shaders':
+      return Loader.simplyShaders;
     default:
       throw ArgumentError('Unknown loader: $value');
   }
