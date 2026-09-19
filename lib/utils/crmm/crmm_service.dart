@@ -16,7 +16,7 @@ class CrmmService {
 
   static Logger crmmLogger = Logger.logger("CRMM Service");
 
-  static Future<List<CrmmProject>> searchProjects(String query, String type, String gameVersion, String sortBy, bool versionLocked) async {
+  static Future<List<CrmmProject>> searchProjects(String query, String type, String gameVersion, String sortBy, bool versionLocked, ReleaseChannel releaseChannel) async {
 
     crmmLogger.log("Searching for '$query' as $type ${versionLocked ? "on Cosmic Reach version $gameVersion" : ''}");
 
@@ -27,7 +27,8 @@ class CrmmService {
           if (type == 'mod') 'l': 'puzzle_loader',
           'sortby': sortBy,
           if (type == 'mod') 'e': 'client', // must support client
-          if (versionLocked) 'v': gameVersion
+          if (versionLocked) 'v': gameVersion,
+          'releaseChannel': releaseChannel.name
         }
     );
 
@@ -41,25 +42,25 @@ class CrmmService {
 
       // Get latest project version info
       if (hits.isEmpty) return [];
-      final versionsUrl = Uri.https('api.crmods.org', '/api/projects',
+      final versionsUrl = Uri.https('api.crmods.org', '/api/projects/versions',
           {
             'ids': hits.map((hit) => hit["id"]).join(','),
-            'include': 'version-info',
-            'version-info-limit': '1'
+            'limit': '1',
+            if (type == 'mod') 'l': 'puzzle_loader',
+            if (versionLocked) 'v': gameVersion,
+            'releaseChannel': releaseChannel.name
           }
       );
       final versionsResponse = await http.get(versionsUrl);
 
       if (versionsResponse.statusCode != 200) crmmLogger.log("Error fetching version info ${versionsResponse.statusCode}");
-      var versionData = {
-        for (final item in (json.decode(versionsResponse.body) as List<dynamic>).map((e) => e))
-          item['id']: item..remove('id')
-      };
+      var versionData = json.decode(versionsResponse.body) as Map<String, dynamic>;
 
       for (var hit in hits) {
-        hit["latestVersionSlug"] = (versionData[hit["id"]]?["versions"][0]?["slug"] as String? ?? '');
-        hit["latestVersionPrimaryFileName"] = (versionData[hit["id"]]?["versions"][0]?["primaryFile"]["name"] as String? ?? '');
-        hit["latestVersionPrimaryFileHash"] = (versionData[hit["id"]]?["versions"][0]?["primaryFile"]["sha512_hash"] as String? ?? '');
+        if ((versionData[hit["id"]] as List<dynamic>).isEmpty) continue;
+        hit["latestVersionSlug"] = (versionData[hit["id"]]?[0]?["slug"] as String? ?? '');
+        hit["latestVersionPrimaryFileName"] = (versionData[hit["id"]]?[0]?["primaryFile"]["name"] as String? ?? '');
+        hit["latestVersionPrimaryFileHash"] = (versionData[hit["id"]]?[0]?["primaryFile"]["sha512_hash"] as String? ?? '');
       }
 
       // Convert each hit to CrmmProject
@@ -76,7 +77,8 @@ class CrmmService {
     return [];
   }
 
-  static Future<void> downloadLatestProject(String slug, String type, bool versionLocked, String path, String gameVersion) async {
+  //TODO unzip data mods at runtime
+  static Future<bool> downloadLatestProject(String slug, String type, bool versionLocked, String path, String gameVersion) async {
     final url = Uri.https('api.crmods.org', '/api/project/$slug/version/latest/primary-file',
         {
           if (versionLocked) 'gameVersion': gameVersion,
@@ -115,16 +117,18 @@ class CrmmService {
         await outputDir.create(recursive: true);
         unawaited(file.rename(p.join(outputDir.path, file.uri.pathSegments.last)));
       } else {
-        await unzipDataMod(file);
+        await unzipDataMod(file); // TODO unzip at runtime
 
         file.deleteSync();
       }
+      return true;
 
     } catch (e, stack) {
       crmmLogger.log('Download failed: $e');
       crmmLogger.log(stack.toString());
       rethrow;
     }
+    return false;
   }
 
   static Future<void> unzipDataMod(File inputFile) async {

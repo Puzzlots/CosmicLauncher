@@ -35,6 +35,7 @@ class _AddContentTabState extends State<AddContentTab> with SingleTickerProvider
   final List<String> projectTypes = ['Mod','Shader','Resource Pack','Datamod'];
 
   bool locked = true;
+  ReleaseChannel releaseChannel = ReleaseChannel.alpha;
 
   @override
   Widget build(BuildContext context) {
@@ -194,6 +195,42 @@ class _AddContentTabState extends State<AddContentTab> with SingleTickerProvider
             ),
           ),
           const SizedBox(width: 5),
+          SizedBox(
+            width: 250, // limits width
+            child: DropdownButtonFormField<String>(
+              initialValue: releaseChannel.name.capitalize(),
+              items:
+              ReleaseChannel.values
+                  .map((v) => DropdownMenuItem(
+                value: v.name.capitalize(),
+                child: Text("Channel: ${v.name.capitalize()}",),
+              ),
+              ).toList(),
+
+              onChanged: (value) {
+                setState(() {
+                  releaseChannel = releaseChannelFromString(value??'');
+                });
+              },
+              borderRadius: BorderRadius.circular(12),
+              dropdownColor: backgroundColour,
+              decoration: InputDecoration(
+                labelText: 'Release channel',
+                floatingLabelBehavior: FloatingLabelBehavior.never,
+                filled: true,
+                fillColor: backgroundColour,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 5),
           IconCheckbox(
             value: locked,
             label: resolveLatest("Vanilla", "Client", widget.instance['version'] as String),
@@ -212,6 +249,7 @@ class _AddContentTabState extends State<AddContentTab> with SingleTickerProvider
             selectedProjectType: selectedProjectType,
             sortBy: sortBy,
             versionLocked: locked,
+            releaseChannel: releaseChannel,
           ),
         ),
       ],
@@ -225,6 +263,7 @@ class _CrmmSearchResults extends StatefulWidget {
   final String selectedProjectType;
   final String sortBy;
   final bool versionLocked;
+  final ReleaseChannel releaseChannel;
 
   const _CrmmSearchResults({
     required this.instance,
@@ -232,6 +271,7 @@ class _CrmmSearchResults extends StatefulWidget {
     required this.selectedProjectType,
     required this.sortBy,
     required this.versionLocked,
+    required this.releaseChannel
   });
 
   @override
@@ -241,27 +281,28 @@ class _CrmmSearchResults extends StatefulWidget {
 class _CrmmSearchResultsState extends State<_CrmmSearchResults> {
   bool loading = false;
   List<CrmmProject> results = [];
+  Map<CrmmProject, bool> downloadingList = {};
 
   @override
   void initState() {
     super.initState();
-    search('', 'mod', 'relevance', true);
+    search('', 'mod', 'relevance', true, ReleaseChannel.beta);
   }
 
   @override
   void didUpdateWidget(covariant _CrmmSearchResults oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.query != widget.query || oldWidget.selectedProjectType != widget.selectedProjectType || oldWidget.sortBy != widget.sortBy || oldWidget.versionLocked != widget.versionLocked) {
-      search(widget.query, widget.selectedProjectType, widget.sortBy, widget.versionLocked);
+    if (oldWidget.query != widget.query || oldWidget.selectedProjectType != widget.selectedProjectType || oldWidget.sortBy != widget.sortBy || oldWidget.versionLocked != widget.versionLocked || oldWidget.releaseChannel != widget.releaseChannel) {
+      search(widget.query, widget.selectedProjectType, widget.sortBy, widget.versionLocked, widget.releaseChannel);
     }
   }
 
 
-  Future<void> search(String query, String projectType, String sortBy, bool versionLocked) async {
+  Future<void> search(String query, String projectType, String sortBy, bool versionLocked, ReleaseChannel releaseChannel) async {
     setState(() => loading = true);
 
     try {
-      final res = await CrmmService.searchProjects(query, projectType, (resolveLatest("Vanilla", "Client", widget.instance['version'] as String).split('-').first), sortBy, versionLocked);
+      final res = await CrmmService.searchProjects(query, projectType, (resolveLatest("Vanilla", "Client", widget.instance['version'] as String).split('-').first), sortBy, versionLocked, releaseChannel);
       setState(() {
         results = res;
       });
@@ -289,39 +330,49 @@ class _CrmmSearchResultsState extends State<_CrmmSearchResults> {
 
     return ListView.builder(
       itemCount: results.length,
+      padding: const EdgeInsets.symmetric(horizontal: 3),
       itemBuilder: (context, index) {
         final project = results[index];
+        downloadingList.putIfAbsent(project, () => false);
 
-        return Card(
-          color: backgroundColour,
-          margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12)
-          ),
-          child: ListTile(
-            title: Text(project.name),
-            subtitle: Text(
-              project.summary,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-            trailing: IconButton(
-              icon: widget.instance["mods"]?[project.slug] != null ? (widget.instance["mods"]?[project.slug]["version"] == project.latestVersionSlug) ? Icon(Icons.check_circle, color: Colors.green) : Icon(Icons.update): Icon(Icons.download),
-              onPressed: () {
-                CrmmService.downloadLatestProject(project.slug, widget.selectedProjectType, widget.versionLocked, p.join(getPersistentCacheDir().path, "instances", widget.instance['uuid'] as String), (resolveLatest("Vanilla", "Client", widget.instance['version'] as String).split('-').first));
-                final Map<String, dynamic> mods = (widget.instance["mods"] ??= <String, dynamic>{} ) as Map<String,dynamic>;
-                mods[project.slug] = {
-                  "version": project.latestVersionSlug,
-                  "enabled": true,
-                  "type": project.projectType,
-                  "path": project.latestVersionPrimaryFileName,
-                  "sha512": project.latestVersionPrimaryFileHash
-                };
-                setState(() {});
-                InstanceManager().saveInstance(widget.instance['uuid'] as String, widget.instance);
-                },
-            ),
-          ),
+        return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: CardBorderSpinner(
+            active: downloadingList[project] ?? false,
+            child: Card(
+              margin: EdgeInsets.zero,
+              color: backgroundColour,
+              child: ListTile(
+                title: Text(project.name),
+                subtitle: Text(
+                  project.summary,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                trailing: IconButton(
+                  icon: widget.instance["mods"]?[project.slug] != null ? (widget.instance["mods"]?[project.slug]["version"] == project.latestVersionSlug || project.latestVersionSlug == '' /* <- Prevents projects which have no versions for the selected search showing as update available (P.S. not sure how this is possible)*/) ? Icon(Icons.check_circle, color: Colors.green) : Icon(Icons.update): Icon(Icons.download, color: downloadingList[project] ?? false ? Colors.blue : Colors.white),
+                  onPressed: () async {
+                    if (downloadingList[project] == true || widget.instance["mods"]?[project.slug] != null) return;
+                    setState(() {downloadingList[project] = true;});
+                    final downloaded = await CrmmService.downloadLatestProject(project.slug, widget.selectedProjectType, widget.versionLocked, p.join(getPersistentCacheDir().path, "instances", widget.instance['uuid'] as String), (resolveLatest("Vanilla", "Client", widget.instance['version'] as String).split('-').first));
+                    if (!mounted) return;
+                    setState(() {downloadingList[project] = false;});
+                    if (!downloaded) return;
+                    final Map<String, dynamic> mods = (widget.instance["mods"] ??= <String, dynamic>{} ) as Map<String,dynamic>;
+                    mods[project.slug] = {
+                      "version": project.latestVersionSlug,
+                      "enabled": true,
+                      "type": project.projectType,
+                      "path": project.latestVersionPrimaryFileName,
+                      "sha512": project.latestVersionPrimaryFileHash
+                    };
+                    setState(() {});
+                    await InstanceManager().saveInstance(widget.instance['uuid'] as String, widget.instance);
+                  },
+                ),
+              ),
+            )
+        )
         );
       },
     );

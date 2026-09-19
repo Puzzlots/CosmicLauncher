@@ -115,3 +115,27 @@ Loader _loaderFromString(String value) {
       throw ArgumentError('Unknown loader: $value');
   }
 }
+
+enum ReleaseChannel {
+  release,
+  beta,
+  alpha,
+  dev
+}
+
+ReleaseChannel releaseChannelFromString(String value) {
+  switch (value.toLowerCase()) {
+    case 'release':
+      return ReleaseChannel.release;
+    case 'beta':
+      return ReleaseChannel.beta;
+    case 'alpha':
+      return ReleaseChannel.alpha;
+    case 'dev':
+      return ReleaseChannel.dev;
+    default:
+      throw ArgumentError('Unknown release channel: $value');
+  }
+}
+
+
