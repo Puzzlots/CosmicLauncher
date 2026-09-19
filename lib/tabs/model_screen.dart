@@ -16,7 +16,6 @@ import '../utils/cache_utils.dart' as cache_utils;
 import '../utils/credentials.dart';
 import '../utils/general_utils.dart';
 import '../utils/logger.dart';
-import '../utils/os_utils.dart';
 
 class Skin {
   File file;
@@ -64,7 +63,6 @@ class _ModelScreenState extends State<ModelScreen> {
   @override
   void initState() {
     super.initState();
-    if (!Platform.isWindows) return;
     _skins = _getAllSkins();
     threeJs = three.ThreeJS(
       setup: _setup,
@@ -415,17 +413,15 @@ class _ModelScreenState extends State<ModelScreen> {
   }
 
   Future<void> _importSkin() async {
-    final result = await FilePicker.pickFiles(
+    final results = await FilePicker.pickFiles(
       dialogTitle: "Select skin file",
-      lockParentWindow: true,
+      windowsOptions: WindowsOptions(lockParentWindow: true),
+      linuxOptions: LinuxOptions(lockParentWindow: true),
       type: FileType.custom,
       allowedExtensions: ["png"],
-      allowMultiple: true,
     );
 
-    if (result == null) return;
-
-    for (final path in result.paths.whereType<String>()) {
+    for (final path in results.whereType<String>()) {
       final file = File(path);
       final fileName = p.basename(file.path);
       var destination = File(p.join(skinDir.path, fileName));
@@ -651,7 +647,7 @@ class _ModelScreenState extends State<ModelScreen> {
         }
       });
 
-      final target = three.WebGLRenderTarget(width, height);
+      final target = three.RenderTarget(width, height);
 
       final oldTarget = threeJs.renderer!.getRenderTarget();
       final oldClearAlpha = threeJs.renderer!.getClearAlpha();
@@ -666,7 +662,7 @@ class _ModelScreenState extends State<ModelScreen> {
       final List<Uint8List> rawFrames = [];
 
       for (int i = 0; i < steps; i++) {
-        final three.Uint8Array buffer = three.Uint8Array(width * height * 4);
+        final Uint8List buffer = Uint8List(width * height * 4);
         preview.rotation.y = ((i / steps) * 360 + 180.0) * (math.pi / 180.0);
         threeJs.renderer!.clear();
         threeJs.renderer!.render(scene, camera);
@@ -678,7 +674,7 @@ class _ModelScreenState extends State<ModelScreen> {
           height,
           buffer,
         );
-        rawFrames.add(Uint8List.fromList(buffer.toDartList()));
+        rawFrames.add(buffer);
       }
 
       threeJs.renderer!.setRenderTarget(oldTarget);

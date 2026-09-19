@@ -169,7 +169,8 @@ class LauncherHomeState extends State<LauncherHome> {
 
     final result = await FilePicker.getDirectoryPath(
       dialogTitle: "Select instance folders",
-      lockParentWindow: true,
+      windowsOptions: WindowsOptions(lockParentWindow: true),
+      linuxOptions: LinuxOptions(lockParentWindow: true),
       initialDirectory: resolvedInitialDir,
     );
 
