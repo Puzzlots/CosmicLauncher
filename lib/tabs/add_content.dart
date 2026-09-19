@@ -338,41 +338,41 @@ class _CrmmSearchResultsState extends State<_CrmmSearchResults> {
         return Padding(
             padding: const EdgeInsets.symmetric(vertical: 4),
             child: CardBorderSpinner(
-            active: downloadingList[project] ?? false,
-            child: Card(
-              margin: EdgeInsets.zero,
-              color: backgroundColour,
-              child: ListTile(
-                title: Text(project.name),
-                subtitle: Text(
-                  project.summary,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                trailing: IconButton(
-                  icon: widget.instance["mods"]?[project.slug] != null ? (widget.instance["mods"]?[project.slug]["version"] == project.latestVersionSlug || project.latestVersionSlug == '' /* <- Prevents projects which have no versions for the selected search showing as update available (P.S. not sure how this is possible)*/) ? Icon(Icons.check_circle, color: Colors.green) : Icon(Icons.update): Icon(Icons.download, color: downloadingList[project] ?? false ? Colors.blue : Colors.white),
-                  onPressed: () async {
-                    if (downloadingList[project] == true || widget.instance["mods"]?[project.slug] != null) return;
-                    setState(() {downloadingList[project] = true;});
-                    final downloaded = await CrmmService.downloadLatestProject(project.slug, widget.selectedProjectType, widget.versionLocked, p.join(getPersistentCacheDir().path, "instances", widget.instance['uuid'] as String), (resolveLatest("Vanilla", "Client", widget.instance['version'] as String).split('-').first));
-                    if (!mounted) return;
-                    setState(() {downloadingList[project] = false;});
-                    if (!downloaded) return;
-                    final Map<String, dynamic> mods = (widget.instance["mods"] ??= <String, dynamic>{} ) as Map<String,dynamic>;
-                    mods[project.slug] = {
-                      "version": project.latestVersionSlug,
-                      "enabled": true,
-                      "type": project.projectType,
-                      "path": project.latestVersionPrimaryFileName,
-                      "sha512": project.latestVersionPrimaryFileHash
-                    };
-                    setState(() {});
-                    await InstanceManager().saveInstance(widget.instance['uuid'] as String, widget.instance);
-                  },
-                ),
-              ),
+                active: downloadingList[project] ?? false,
+                child: Card(
+                  margin: EdgeInsets.zero,
+                  color: backgroundColour,
+                  child: ListTile(
+                    title: Text(project.name),
+                    subtitle: Text(
+                      project.summary,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    trailing: IconButton(
+                      icon: widget.instance["mods"]?[project.slug] != null ? (widget.instance["mods"]?[project.slug]["version"] == project.latestVersionSlug || project.latestVersionSlug == '' /* <- Prevents projects which have no versions for the selected search showing as update available (P.S. not sure how this is possible)*/) ? Icon(Icons.check_circle, color: Colors.green) : Icon(Icons.update): Icon(Icons.download, color: downloadingList[project] ?? false ? Colors.blue : Colors.white),
+                      onPressed: () async {
+                        if (downloadingList[project] == true || widget.instance["mods"]?[project.slug] != null) return;
+                        setState(() {downloadingList[project] = true;});
+                        final downloaded = await CrmmService.downloadLatestProject(project.slug, widget.selectedProjectType, widget.versionLocked, p.join(getPersistentCacheDir().path, "instances", widget.instance['uuid'] as String), (resolveLatest("Vanilla", "Client", widget.instance['version'] as String).split('-').first));
+                        if (!mounted) return;
+                        setState(() {downloadingList[project] = false;});
+                        if (!downloaded) return;
+                        final Map<String, dynamic> mods = (widget.instance["mods"] ??= <String, dynamic>{} ) as Map<String,dynamic>;
+                        mods[project.slug] = {
+                          "version": project.latestVersionSlug,
+                          "enabled": true,
+                          "type": project.projectType,
+                          "path": project.latestVersionPrimaryFileName,
+                          "sha512": project.latestVersionPrimaryFileHash
+                        };
+                        setState(() {});
+                        await InstanceManager().saveInstance(widget.instance['uuid'] as String, widget.instance);
+                      },
+                    ),
+                  ),
+                )
             )
-        )
         );
       },
     );

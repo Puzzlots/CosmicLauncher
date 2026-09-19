@@ -317,7 +317,7 @@ class LauncherHomeState extends State<LauncherHome> {
 
     List<String> args;
 
-    //TODO unzip data mods at runtime
+    final sep = Platform.isWindows ? ';' : ':';
     switch (loader) {
       case 'Puzzle': {
         final libFile = File(p.join(getPersistentCacheDir().path, "puzzle_runtime", "${resolveLatest('Puzzle', 'Core', (instance['Core'] as String?) ?? 'latest')}-${resolveLatest('Puzzle', 'Cosmic', (instance['Cosmic'] as String?) ?? 'latest')}.txt"));
@@ -326,15 +326,14 @@ class LauncherHomeState extends State<LauncherHome> {
           unawaited(instanceManager.refreshInstance(context, instance));
           return;
         }
-        final sep = Platform.isWindows ? ';' : ':';
 
-        var mods = (instance["mods"] as Map<String, dynamic>)
+        var jMods = (instance["mods"] as Map<String, dynamic>)
             .values
             .where((e) => e["type"] == "mod" && e["enabled"] as bool)
-            .map((f) => p.join(getPersistentCacheDir().path, "instances", instance["uuid"] as String, "jmods", f["path"] as String))
+            .map((f) => p.join(getPersistentCacheDir().path, "instances", instance["uuid"] as String, CrmmService.javaModDir, f["path"] as String))
             .join(sep);
 
-        logger.log("Json Mods: $mods");
+        logger.log("Json Mods: $jMods");
 
         var jars = libFile
             .readAsLinesSync()
@@ -352,7 +351,7 @@ class LauncherHomeState extends State<LauncherHome> {
           '-Xmx${maxMem}m',
           '-cp', jars,
           'dev.puzzleshq.puzzleloader.loader.launch.pieces.ClientPiece',
-          '--mod-paths=$mods',
+          '--mod-paths=$jMods',
           '-s', (p.join(getPersistentCacheDir().path, "instances", instance['uuid'] as String))
         ];
       }
@@ -365,6 +364,15 @@ class LauncherHomeState extends State<LauncherHome> {
         ];
       }
       default: return;
+    }
+
+    var dMods = (instance["mods"] as Map<String, dynamic>)
+        .values
+        .where((e) => e["type"] != "mod" && e["enabled"] as bool)
+        .map((f) => p.join(getPersistentCacheDir().path, "instances", instance["uuid"] as String, CrmmService.dataModDir, f["path"] as String));
+
+    for (var dMod in dMods) {
+      await CrmmService.unzipDataMod(File(dMod));
     }
 
     final env = <String, String>{};
@@ -418,6 +426,7 @@ class LauncherHomeState extends State<LauncherHome> {
         SnackBar(content: Text("Failed to launch instance: $e")),
       );
     }
+    Directory(p.join(getPersistentCacheDir().path, "instances", instance['uuid'] as String, CrmmService.modDir)).deleteSync(recursive: true);
   }
 
   OverlayEntry? _activeOverlay;

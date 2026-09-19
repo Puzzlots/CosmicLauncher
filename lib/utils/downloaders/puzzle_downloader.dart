@@ -4,10 +4,12 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as p;
 import 'package:polaris/utils/cache_utils.dart';
-import 'package:polaris/utils/download_utils.dart';
 import 'package:polaris/utils/version_cache.dart';
 
+import '../logger.dart';
 import 'cosmic_downloader.dart';
+
+Logger downloadLogger = Logger.logger("Puzzle Downloader");
 
 Future<void> downloadPuzzleVersion(
     String coreVersion,

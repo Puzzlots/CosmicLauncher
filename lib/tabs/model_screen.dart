@@ -16,6 +16,7 @@ import '../utils/cache_utils.dart' as cache_utils;
 import '../utils/credentials.dart';
 import '../utils/general_utils.dart';
 import '../utils/logger.dart';
+import '../utils/os_utils.dart';
 
 class Skin {
   File file;
@@ -63,6 +64,7 @@ class _ModelScreenState extends State<ModelScreen> {
   @override
   void initState() {
     super.initState();
+    if (!Platform.isWindows) return;
     _skins = _getAllSkins();
     threeJs = three.ThreeJS(
       setup: _setup,

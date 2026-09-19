@@ -21,11 +21,6 @@ class _DefaultOptionsPageState extends State<DefaultOptionsPage> {
   @override
   Widget build(BuildContext context) {
     final TextEditingController appDirController = TextEditingController(text: getPersistentCacheDir().path);
-    final TextEditingController  maxDownloadsController = TextEditingController(text: widget.prefs.getValue('max_concurrent_downloads', defaultValue: 3).toString());
-    double? maxDownloads = double.tryParse(maxDownloadsController.text);
-
-    final TextEditingController maxWritesController = TextEditingController(text: widget.prefs.getValue('max_concurrent_writes', defaultValue: 10).toString());
-    double? maxWrites = double.tryParse(maxWritesController.text);
 
     return SingleChildScrollView(
       child: Column(
@@ -62,31 +57,6 @@ class _DefaultOptionsPageState extends State<DefaultOptionsPage> {
             ],
           ),
           const SizedBox(height: 16),
-          buildPersistentSliderWithController(
-            label: "Max Concurrent Downloads",
-            value: maxDownloads!.toDouble(),
-            controller: maxDownloadsController,
-            min: 1,
-            max: 10,
-            onChanged: (v) => setState(() {
-              maxDownloads = v.toDouble();
-              maxDownloadsController.text = maxDownloads!.toInt().toString(); //TODO
-            }),
-            keyName: 'max_concurrent_downloads',
-          ),
-          const SizedBox(height: 8),
-          buildPersistentSliderWithController(
-            label: "Max Concurrent Writes",
-            value: maxWrites!.toDouble(),
-            controller: maxWritesController,
-            min: 1,
-            max: 50,
-            onChanged: (v) => setState(() {
-              maxWrites = v.toDouble();
-              maxWritesController.text = maxWrites!.toInt().toString(); //TODO
-            }),
-            keyName: 'max_concurrent_writes',
-          ),
         ],
       ),
     );

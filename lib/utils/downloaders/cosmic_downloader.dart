@@ -7,7 +7,7 @@ import '../cache_utils.dart';
 import '../logger.dart';
 import '../version_cache.dart';
 
-Logger downloaderLogger = Logger.logger("Downloader");
+Logger downloaderLogger = Logger.logger("Cosmic Downloader");
 
 Future<void> downloadCosmicReachVersion(
     String version,

@@ -11,7 +11,8 @@ import 'package:polaris/utils/crmm/crmm_project.dart';
 import '../logger.dart';
 
 class CrmmService {
-  static final dataModDir = "mods";
+  static final modDir = "mods";
+  static final dataModDir = "dmods";
   static final javaModDir = "jmods";
 
   static Logger crmmLogger = Logger.logger("CRMM Service");
@@ -77,7 +78,6 @@ class CrmmService {
     return [];
   }
 
-  //TODO unzip data mods at runtime
   static Future<bool> downloadLatestProject(String slug, String type, bool versionLocked, String path, String gameVersion) async {
     final url = Uri.https('api.crmods.org', '/api/project/$slug/version/latest/primary-file',
         {
@@ -112,15 +112,10 @@ class CrmmService {
       await file.parent.create(recursive: true);
       await file.writeAsBytes(response.bodyBytes);
 
-      if (type == 'mod'){
-        final outputDir = Directory(p.join(file.parent.path, javaModDir));
-        await outputDir.create(recursive: true);
-        unawaited(file.rename(p.join(outputDir.path, file.uri.pathSegments.last)));
-      } else {
-        await unzipDataMod(file); // TODO unzip at runtime
+      final outputDir = Directory(p.join(file.parent.path, type == 'mod' ? javaModDir : dataModDir));
+      await outputDir.create(recursive: true);
+      unawaited(file.rename(p.join(outputDir.path, file.uri.pathSegments.last)));
 
-        file.deleteSync();
-      }
       return true;
 
     } catch (e, stack) {
@@ -128,23 +123,21 @@ class CrmmService {
       crmmLogger.log(stack.toString());
       rethrow;
     }
-    return false;
   }
 
   static Future<void> unzipDataMod(File inputFile) async {
-    crmmLogger.log("Unpacking ${inputFile.path} \n to parent ${inputFile.parent.toString()}/$dataModDir");
+    crmmLogger.log("Unpacking ${inputFile.path}");
 
     if (lookupMimeType(inputFile.path) != "application/zip") return;
 
     final fileStream = InputFileStream(inputFile.path);
     final archive = ZipDecoder().decodeStream(fileStream);
 
-    final outputDir = Directory(p.join(inputFile.parent.path, dataModDir));
+    final outputDir = Directory(p.join(inputFile.parent.parent.path, modDir));
     await outputDir.create(recursive: true);
 
     crmmLogger.log("Extracting to: ${outputDir.path}");
     await extractArchiveToDisk(archive, outputDir.path);
-    crmmLogger.log("Extraction complete.");
   }
 
   static List<String> sortBy = [
