@@ -291,24 +291,21 @@ class LauncherHomeState extends State<LauncherHome> {
   final runningInstances = ValueNotifier<int>(0);
 
   Future<void> _launchInstance(Map<String, dynamic> instance) async {
-    if (!mounted) return;
+    await Directory(p.join(getPersistentCacheDir().path, "instances", instance["uuid"] as String)).create(recursive: true);
+
+    if(!mounted) return;
     if (instance['downloading'] == true) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("${instance['name']} is still downloading")),);
       return;
     }
 
     if (!_checkVersionDownloaded(instance)) return;
-    if (instance['downloaded'] == false) {
-      unawaited(instanceManager.refreshInstance(context, instance));
-      return;
-    }
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text("Launching ${instance['name']}...")),
     );
 
     final prefs = await PersistentPrefs.open();
-    if (!mounted) return;
 
     final loader = instance['loader'];
     if (loader == null) return;
@@ -322,11 +319,6 @@ class LauncherHomeState extends State<LauncherHome> {
     switch (loader) {
       case 'Puzzle': {
         final libFile = File(p.join(getPersistentCacheDir().path, "puzzle_runtime", "${resolveLatest('Puzzle', 'Core', (instance['Core'] as String?) ?? 'latest')}-${resolveLatest('Puzzle', 'Cosmic', (instance['Cosmic'] as String?) ?? 'latest')}.txt"));
-        if (!libFile.existsSync()) {
-          logger.log("Library file does not exist");
-          unawaited(instanceManager.refreshInstance(context, instance));
-          return;
-        }
 
         var jMods = (instance["mods"] as Map<String, dynamic>)
             .values
@@ -334,7 +326,7 @@ class LauncherHomeState extends State<LauncherHome> {
             .map((f) => p.join(getPersistentCacheDir().path, "instances", instance["uuid"] as String, CrmmService.javaModDir, f["path"] as String))
             .join(sep);
 
-        logger.log("Json Mods: $jMods");
+        logger.log("Java Mods: $jMods");
 
         var jars = libFile
             .readAsLinesSync()
@@ -353,6 +345,7 @@ class LauncherHomeState extends State<LauncherHome> {
           '-cp', jars,
           'dev.puzzleshq.puzzleloader.loader.launch.pieces.ClientPiece',
           '--mod-paths=$jMods',
+          '--mod-folder=${modFolderDir.parent.path}',
           '-s', (p.join(getPersistentCacheDir().path, "instances", instance['uuid'] as String))
         ];
       }
@@ -367,20 +360,24 @@ class LauncherHomeState extends State<LauncherHome> {
       default: return;
     }
 
-    var dMods = (instance["mods"] as Map<String, dynamic>)
-        .values
-        .where((e) => e["type"] != "mod" && e["enabled"] as bool)
-        .map((f) => p.join(getPersistentCacheDir().path, "instances", instance["uuid"] as String, CrmmService.dataModDir, f["path"] as String));
+    if (instance["mods"] != null) {
+      var dMods = (instance["mods"] as Map<String, dynamic>)
+          .values
+          .where((e) => e["type"] != "mod" && e["enabled"] as bool)
+          .map((f) =>
+          p.join(getPersistentCacheDir().path, "instances",
+              instance["uuid"] as String, CrmmService.dataModDir,
+              f["path"] as String));
 
-    for (var dMod in dMods) {
-      await CrmmService.unzipDataMod(File(dMod));
+      for (var dMod in dMods) {
+        await CrmmService.unzipDataMod(File(dMod));
+      }
     }
 
     final env = <String, String>{};
     final key = await ItchSecureStore.loadKey();
     env['ITCHIO_API_KEY'] = key??'';
     var raw = prefs.getValue<dynamic>('defaults_instance_vars').toString().split(',');
-
 
     env.addAll(Map.fromEntries(
       raw
@@ -396,7 +393,8 @@ class LauncherHomeState extends State<LauncherHome> {
 
     args.addAll(prefs.getValue<dynamic>('defaults_instance_args').toString().split(','));
 
-    await createSymlink(p.join(getCosmicReachDir().path, "skins"), p.join(getPersistentCacheDir().path, "instances", instance['uuid'] as String, "skins"));
+    if (!mounted) return;
+    await createSymlink(context, p.join(getCosmicReachDir().path, "skins"), p.join(getPersistentCacheDir().path, "instances", instance['uuid'] as String, "skins"));
 
     try {
       final startTime = DateTime.now().toUtc();
@@ -427,7 +425,8 @@ class LauncherHomeState extends State<LauncherHome> {
         SnackBar(content: Text("Failed to launch instance: $e")),
       );
     }
-    Directory(p.join(getPersistentCacheDir().path, "instances", instance['uuid'] as String, CrmmService.modDir)).deleteSync(recursive: true);
+    var tempModsDir = Directory(p.join(getPersistentCacheDir().path, "instances", instance['uuid'] as String, CrmmService.modDir));
+    if (await tempModsDir.exists()) await tempModsDir.delete(recursive: true);
   }
 
   OverlayEntry? _activeOverlay;
@@ -737,13 +736,19 @@ class LauncherHomeState extends State<LauncherHome> {
 
 
   bool _checkVersionDownloaded(Map<String, dynamic> instance) {
+    if (instance['downloaded'] == false) {
+      logger.log("Instance not downloaded");
+      unawaited(instanceManager.refreshInstance(context, instance));
+      return false;
+    }
     if (!File(p.join(getPersistentCacheDir().path, "cosmic_versions", "cosmic-reach-client-${resolveLatest("Vanilla","Client", instance['version'] as String)}.jar")).existsSync()) {
+      logger.log("Cosmic Reach jar does not exist");
       unawaited(instanceManager.refreshInstance(context, instance));
       return false;
     }
     if (instance['loader'] == 'Puzzle') {
       if (!File(p.join(getPersistentCacheDir().path, "puzzle_runtime", "${resolveLatest("Puzzle", "Core",instance['Core'] as String? ?? 'latest')}-${resolveLatest("Puzzle", "Cosmic", instance['Cosmic'] as String? ?? 'latest')}.txt")).existsSync()) {
-        logger.log("Library does not exist");
+        logger.log("Library file does not exist");
         unawaited(instanceManager.refreshInstance(context, instance));
         return false;
       }

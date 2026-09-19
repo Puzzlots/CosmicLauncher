@@ -126,6 +126,7 @@ class CrmmService {
   }
 
   static Future<void> unzipDataMod(File inputFile) async {
+    if (!inputFile.existsSync()) return;
     crmmLogger.log("Unpacking ${inputFile.path}");
 
     if (lookupMimeType(inputFile.path) != "application/zip") return;

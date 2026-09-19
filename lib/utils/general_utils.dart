@@ -1,6 +1,9 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:fluent_ui/fluent_ui.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as p;
@@ -123,12 +126,41 @@ Future<String?> getUsername(String? apiKey) async {
   return json['user']['username'] as String;
 }
 
-Future<void> createSymlink(String target, String linkPath) async {
+Future<void> createSymlink(BuildContext context, String target, String linkPath) async {
   final link = Link(linkPath);
 
-  if (await link.exists()) {
-    await link.delete();
-  }
+  if (await link.exists()) return;
 
-  await link.create(target);
+  try {
+    await link.create(target);
+  } on FileSystemException {
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text("Skins require admin rights, the program will restart now")),
+    );
+    sleep(Duration(seconds: 3));
+    await elevate();
+    exit(0);
+  } catch (e) {
+    logger.log("Failed to create symlink: $e");
+  }
+}
+
+Future<void> elevate() async {
+  final exe = Platform.resolvedExecutable;
+
+  final result = await Process.run(
+    'powershell',
+    [
+      '-NoProfile',
+      '-Command',
+      '''
+      Start-Process -FilePath "$exe" -Verb RunAs
+      ''',
+    ],
+  );
+
+  if (result.exitCode != 0) {
+    throw Exception('Failed to request administrator privileges');
+  }
 }

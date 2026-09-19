@@ -127,7 +127,10 @@ class InstanceManager {
       instance['downloading'] = true;
     });
 
-    if (!await instanceExists(instance['uuid'] as String)) return;
+    if (!await instanceExists(instance['uuid'] as String)) {
+      logger.log("Instance does not exist");
+      return;
+    }
 
     try {
       await downloadCosmicReachVersion(
@@ -154,9 +157,7 @@ class InstanceManager {
       );
       logger.log(e.toString());
     } finally {
-      CosmicReachLauncher.launcherHomeKey.currentState?.setState(() {
-        instance['downloading'] = false;
-      });
+      await loadInstances(context);
     }
   }
 
